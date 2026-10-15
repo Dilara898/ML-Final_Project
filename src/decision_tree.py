@@ -145,7 +145,7 @@ class DecisionTree:
         return best
 
     # --- grow / predict -----------------------------------------------------
-    
+
     def _leaf_value(self, y):
         if self._crit() == 'mse':
             return float(np.mean(y))
@@ -179,17 +179,42 @@ class DecisionTree:
         node.right = self._grow(X[~mask], y[~mask], depth + 1)
         return node
 
+ 
     def fit(self, X, y):
+        if self.task not in ('classification', 'regression'):
+            raise ValueError('task must be classification or regression')
+        if self.task == 'classification' and self.criterion not in ('gini', 'entropy'):
+            raise ValueError('classification needs criterion gini or entropy')
+
         X = np.asarray(X, dtype=float)
         y = np.asarray(y)
+        if self.task == 'classification':
+            self.classes_, y = np.unique(y, return_inverse=True)   # labels -> 0..k-1
+            self._n_classes = len(self.classes_)
+        else:
+            y = y.astype(float)
+
+        self._n_total = len(y)
+        self._importances = np.zeros(X.shape[1])
         self.root = self._grow(X, y, depth=0)
+
+        total = self._importances.sum()
+        self.feature_importances_ = self._importances / total if total > 0 else self._importances
         return self
 
+ 
     def _predict_one(self, x, node: Node):
-        raise NotImplementedError("TODO: traverse to a leaf")
+        '''Walk from the root to a leaf and return the leaf's value.'''
+        while not node.is_leaf():
+            node = node.left if x[node.feature] <= node.threshold else node.right
+        return node.value
 
     def predict(self, X):
-        raise NotImplementedError("TODO: predict")
+        X = np.asarray(X, dtype=float)
+        values = [self._predict_one(x, self.root) for x in X]
+        if self.task == 'regression':
+            return np.array(values, dtype=float)
+        return self.classes_[np.argmax(np.vstack(values), axis=1)]
 
     def predict_proba(self, X):
         """Classification only: return class probabilities from leaf counts."""

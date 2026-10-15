@@ -51,3 +51,25 @@ def test_fast_split_matches_brute_force(task, crit):
     assert fast[0] == slow[0]
     assert fast[1] == pytest.approx(slow[1])
     assert fast[2] == pytest.approx(slow[2])
+def test_tiny_example_by_hand():
+    X = np.array([[1.0], [2.0], [3.0], [4.0]])
+    y = np.array([0, 0, 1, 1])
+    t = DecisionTree().fit(X, y)
+    assert t.root.feature == 0
+    assert t.root.threshold == pytest.approx(2.5)
+    assert list(t.predict(X)) == [0, 0, 1, 1]
+
+
+def test_string_labels_work():
+    X = np.array([[1.0], [2.0], [3.0], [4.0]])
+    y = np.array(['standard', 'standard', 'premium', 'premium'])
+    t = DecisionTree().fit(X, y)
+    assert list(t.predict(X)) == ['standard', 'standard', 'premium', 'premium']
+
+
+def test_regression_fits_noiseless_data_perfectly():
+    rng = np.random.default_rng(2)
+    X = rng.normal(size=(80, 2))
+    y = 3 * X[:, 0] - X[:, 1]
+    pred = DecisionTree(task='regression', criterion='mse').fit(X, y).predict(X)
+    assert np.allclose(pred, y)

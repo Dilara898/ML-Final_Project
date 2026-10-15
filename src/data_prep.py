@@ -136,6 +136,41 @@ def prepare_missing_values(df):
 
     return df
 
+
+def remove_duplicate_listings(df):
+    """Keep the latest collected row for each listing URL."""
+    df = df.copy()
+
+    df["listing_url"] = (
+        df["estate_rel_url_x"].astype("string").str.strip()
+    )
+
+    # Treat timestamps without timezone information as UTC.
+    df["_scrape_time"] = pd.to_datetime(
+        df["datetime_scrape_x"],
+        format="mixed",
+        utc=True,
+        errors="coerce",
+    )
+
+    if df["listing_url"].isna().any() or df["listing_url"].eq("").any():
+        raise ValueError("Missing listing URLs: review before deduplication.")
+
+    if df["_scrape_time"].isna().any():
+        raise ValueError("Invalid scrape timestamps: review before deduplication.")
+
+    df = df.sort_values("_scrape_time", kind="stable")
+
+    df = df.drop_duplicates(
+        subset="listing_url",
+        keep="last",
+    )
+
+    return df.drop(columns="_scrape_time").reset_index(drop=True)
+
+
+
+
 def clean(df):
     """
     Clean the raw frame:
@@ -194,6 +229,22 @@ if __name__ == "__main__":
     df = parse_area(df)
     df = parse_land_area(df)
     df = prepare_missing_values(df)
+    
+    rows_before = len(df)
+    df = remove_duplicate_listings(df)
+
+    print("\nRows before:", rows_before)
+    print("Rows after:", len(df))
+    print("Rows removed:", rows_before - len(df))
+    print("Repeated URLs remaining:", df["listing_url"].duplicated().sum())
+
+    print("\nRetained example listing:")
+    print(
+        df.loc[
+            df["listing_url"].eq("/items/4582627"),
+            ["listing_url", "price", "datetime_scrape_x"],
+        ].to_string(index=False)
+    )
 
     # print("\nArea parsing examples:")
     # print(
@@ -464,20 +515,122 @@ if __name__ == "__main__":
     # print("\nMissing percentage within each category:")
     # print(missing_by_category.to_string())
 
-    print("\nMissingness indicators:")
-    print(
-        df[
-            [
-                "land_area_m2_missing",
-                "floor_number_missing",
-                "total_floors_missing",
-                "rooms_missing",
-            ]
-        ].sum()
-    )
+    # print("\nMissingness indicators:")
+    # print(
+    #     df[
+    #         [
+    #             "land_area_m2_missing",
+    #             "floor_number_missing",
+    #             "total_floors_missing",
+    #             "rooms_missing",
+    #         ]
+    #     ].sum()
+    # )
 
-    print("\nRenovation categories:")
-    print(df["renovation"].value_counts(dropna=False))
+    # print("\nRenovation categories:")
+    # print(df["renovation"].value_counts(dropna=False))
 
-    print("\nMortgage categories:")
-    print(df["mortgage_available"].value_counts(dropna=False))
+    # print("\nMortgage categories:")
+    # print(df["mortgage_available"].value_counts(dropna=False))
+
+
+    # print("\nTotal rows:", len(df))
+    # print("Exact duplicate rows beyond the first:", df.duplicated().sum())
+
+    # print("\nMissing estate IDs:", df["estate_id"].isna().sum())
+
+    # listing_counts = df["estate_id"].value_counts()
+    # repeated_ids = listing_counts[listing_counts > 1]
+
+    # print("Distinct non-missing estate IDs:", len(listing_counts))
+    # print("Estate IDs appearing multiple times:", len(repeated_ids))
+    # print("Extra rows for repeated IDs:", (repeated_ids - 1).sum())
+
+    # print("\nFive most repeated estate IDs:")
+    # print(repeated_ids.head(5))
+
+    # example_ids = repeated_ids.head(2).index
+
+    # print("\nExample repeated listings:")
+    # print(
+    #     df.loc[
+    #         df["estate_id"].isin(example_ids),
+    #         [
+    #             "estate_id",
+    #             "price",
+    #             "property_category",
+    #             "area_m2",
+    #             "datetime_scrape_x",
+    #             "datetime_scrape_y",
+    #         ],
+    #     ]
+    #     .sort_values(["estate_id", "datetime_scrape_x"])
+    #     .head(20)
+    #     .to_string(index=False)
+    # )
+
+
+
+
+
+    # url_columns = [
+    #     "estate_rel_url_x",
+    #     "estate_rel_url_y",
+    #     "estate_rel_url",
+    # ]
+
+    # for column in url_columns:
+    #     urls = df[column].astype("string").str.strip()
+    #     valid_urls = urls[urls.notna() & urls.ne("")]
+
+    #     counts = valid_urls.value_counts()
+    #     repeated = counts[counts > 1]
+
+    #     print(f"\n--- {column} ---")
+    #     print("Missing or blank URLs:", len(df) - len(valid_urls))
+    #     print("Distinct URLs:", len(counts))
+    #     print("URLs appearing multiple times:", len(repeated))
+    #     print("Extra rows for repeated URLs:", (repeated - 1).sum())
+
+    #     print("Example URLs:")
+    #     print(valid_urls.head(3).to_string(index=False))
+
+    #     print("Most repeated URLs:")
+    #     print(repeated.head(5))
+
+    # urls = df[
+    #     ["estate_rel_url_x", "estate_rel_url_y", "estate_rel_url"]
+    # ].apply(lambda column: column.astype("string").str.strip())
+
+    # url_mismatch = (
+    #     urls["estate_rel_url_x"].ne(urls["estate_rel_url_y"])
+    #     | urls["estate_rel_url_x"].ne(urls["estate_rel_url"])
+    # )
+
+    # print("\nRows with conflicting listing URLs:", url_mismatch.sum())
+
+    # scrape_time = pd.to_datetime(
+    #     df["datetime_scrape_x"],
+    #     format="mixed",
+    #     utc=True,
+    #     errors="coerce",
+    # )
+
+    # print("Missing or unreadable scrape timestamps:", scrape_time.isna().sum())
+
+    # example_url = "/items/4582627"
+
+    # example = df.loc[
+    #     urls["estate_rel_url_x"].eq(example_url),
+    #     ["estate_rel_url_x", "price", "area_m2", "datetime_scrape_x"],
+    # ].copy()
+
+    # example["parsed_time"] = scrape_time.loc[example.index]
+
+    # print("\nHistory of one repeated listing:")
+    # print(
+    #     example.sort_values("parsed_time")
+    #     .to_string(index=False)
+    # )
+
+

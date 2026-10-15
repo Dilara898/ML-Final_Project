@@ -28,6 +28,8 @@ class Node:
         self.left = None         # Node
         self.right = None        # Node
         self.value = None        # leaf prediction (class label/proba or mean)
+        self.n_samples = 0       # how many training rows reached this node
+        self.impurity = 0.0      # impurity of the rows at this node
 
     def is_leaf(self) -> bool:
         return self.left is None and self.right is None
@@ -143,9 +145,39 @@ class DecisionTree:
         return best
 
     # --- grow / predict -----------------------------------------------------
+    
+    def _leaf_value(self, y):
+        if self._crit() == 'mse':
+            return float(np.mean(y))
+        return np.bincount(y.astype(int), minlength=self._n_classes) / len(y)
+
     def _grow(self, X, y, depth: int) -> Node:
-        """Recursively build the tree, respecting the stopping rules."""
-        raise NotImplementedError("TODO: recursive grow")
+        '''Recursively build the tree, respecting the stopping rules.'''
+        node = Node()
+        node.n_samples = len(y)
+        node.impurity = self._impurity(y)
+        node.value = self._leaf_value(y)
+
+        # stopping rules -> this node becomes a leaf
+        if node.impurity <= 1e-12:                                    # already pure
+            return node
+        if len(y) < self.min_samples_split:
+            return node
+        if self.max_depth is not None and depth >= self.max_depth:
+            return node
+
+        split = self._best_split(X, y)
+        if split is None:
+            return node
+        feature, threshold, decrease = split
+
+        self._importances[feature] += len(y) / self._n_total * decrease
+
+        mask = X[:, feature] <= threshold
+        node.feature, node.threshold = feature, threshold
+        node.left = self._grow(X[mask], y[mask], depth + 1)
+        node.right = self._grow(X[~mask], y[~mask], depth + 1)
+        return node
 
     def fit(self, X, y):
         X = np.asarray(X, dtype=float)

@@ -54,9 +54,24 @@ class DecisionTree:
         self.root: Node | None = None
 
     # --- impurity -----------------------------------------------------------
+    
+    def _crit(self) -> str:
+        '''Regression always uses MSE; classification uses gini or entropy.'''
+        return 'mse' if self.task == 'regression' else self.criterion
+
     def _impurity(self, y) -> float:
-        """Gini / entropy (classification) or MSE/variance (regression)."""
-        raise NotImplementedError("TODO: impurity")
+        '''Gini / entropy (classification, y = integer labels) or variance (regression).'''
+        y = np.asarray(y)
+        if len(y) == 0:
+            return 0.0
+        crit = self._crit()
+        if crit == 'mse':
+            return float(np.var(y))
+        p = np.bincount(y.astype(int)) / len(y)          # class fractions
+        if crit == 'gini':
+            return float(1.0 - np.sum(p ** 2))
+        p = p[p > 0]                                      # entropy: skip log(0)
+        return float(-np.sum(p * np.log2(p)))
 
     def _best_split(self, X, y):
         """

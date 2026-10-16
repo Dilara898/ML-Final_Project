@@ -220,8 +220,13 @@ class DecisionTree:
             return np.array(values, dtype=float)
         return self.classes_[np.argmax(np.vstack(values), axis=1)]
 
+    
     def predict_proba(self, X):
-        """Classification only: return class probabilities from leaf counts."""
+        '''Classification only: return class probabilities from leaf counts.'''
+        if self.task != 'classification':
+            raise ValueError('predict_proba is only for classification')
+        X = np.asarray(X, dtype=float)
+        return np.vstack([self._predict_one(x, self.root) for x in X])
 
     def get_depth(self) -> int:
         def depth(node):

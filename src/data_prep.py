@@ -378,6 +378,42 @@ def apply_area_caps(X, caps):
 
     return result
 
+def fit_numeric_imputer(X_train):
+    """Learn numerical replacement values from training data only."""
+    category_medians = (
+        X_train.groupby("property_category")[NUMERIC_FEATURES]
+        .median()
+    )
+
+    overall_medians = X_train[NUMERIC_FEATURES].median()
+
+    if overall_medians.isna().any():
+        raise ValueError("A numerical feature has no observed training values.")
+
+    return {
+        "category_medians": category_medians,
+        "overall_medians": overall_medians,
+    }
+
+
+def apply_numeric_imputer(X, imputer):
+    """Fill numerical gaps using previously learned medians."""
+    result = X.copy()
+
+    for column in NUMERIC_FEATURES:
+        category_values = result["property_category"].map(
+            imputer["category_medians"][column]
+        )
+
+        result[column] = (
+            result[column]
+            .fillna(category_values)
+            .fillna(imputer["overall_medians"][column])
+        )
+
+    return result
+
+
 
 def standardize(X_tr, *others):
     """
@@ -406,25 +442,61 @@ if __name__ == "__main__":
     X_val_capped = apply_area_caps(X_val, area_caps)
     X_te_capped = apply_area_caps(X_te, area_caps)
 
-    print("\nLearned area caps:")
-    for column, limits in area_caps.items():
-        print(column, limits)
+    imputer = fit_numeric_imputer(X_tr_capped)
 
-    for name, original, capped in [
-        ("Training", X_tr, X_tr_capped),
-        ("Validation", X_val, X_val_capped),
-        ("Test", X_te, X_te_capped),
+    X_tr_filled = apply_numeric_imputer(X_tr_capped, imputer)
+    X_val_filled = apply_numeric_imputer(X_val_capped, imputer)
+    X_te_filled = apply_numeric_imputer(X_te_capped, imputer)
+
+    print("\nOverall training medians:")
+    print(imputer["overall_medians"])
+
+    for name, before, after in [
+        ("Training", X_tr_capped, X_tr_filled),
+        ("Validation", X_val_capped, X_val_filled),
+        ("Test", X_te_capped, X_te_filled),
     ]:
+        observed = before[NUMERIC_FEATURES].notna()
+
+        changed_observed = (
+            before[NUMERIC_FEATURES].ne(after[NUMERIC_FEATURES])
+            & observed
+        ).sum().sum()
+
         print(f"\n{name}:")
-        print("Rows preserved:", len(original) == len(capped))
+        print(
+            "Numerical missing values remaining:",
+            after[NUMERIC_FEATURES].isna().sum().sum(),
+        )
+        print("Observed values changed:", changed_observed)
+        print("Rows and order preserved:", before.index.equals(after.index))
+        print(
+            "Missingness indicators preserved:",
+            before[MISSING_INDICATORS].equals(after[MISSING_INDICATORS]),
+        )
 
-        for column in ["area_m2", "land_area_m2"]:
-            changed = (
-                original[column].notna()
-                & original[column].ne(capped[column])
-            )
 
-            print(f"{column} values capped:", changed.sum())
+
+
+    # print("\nLearned area caps:")
+    # for column, limits in area_caps.items():
+    #     print(column, limits)
+
+    # for name, original, capped in [
+    #     ("Training", X_tr, X_tr_capped),
+    #     ("Validation", X_val, X_val_capped),
+    #     ("Test", X_te, X_te_capped),
+    # ]:
+    #     print(f"\n{name}:")
+    #     print("Rows preserved:", len(original) == len(capped))
+
+    #     for column in ["area_m2", "land_area_m2"]:
+    #         changed = (
+    #             original[column].notna()
+    #             & original[column].ne(capped[column])
+    #         )
+
+    #         print(f"{column} values capped:", changed.sum())
 
 
 

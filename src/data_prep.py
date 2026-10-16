@@ -73,6 +73,7 @@ MISSING_INDICATORS = [
     "floor_number_missing",
     "total_floors_missing",
     "rooms_missing",
+    "coordinates_missing",
 ]
 
 
@@ -215,6 +216,27 @@ def select_features(df):
 
     return X, y
 
+def clean_coordinates(df):
+    """Mark invalid or manually identified unreliable coordinates as missing."""
+    df = df.copy()
+
+    invalid = (
+        ~df["lat"].between(-90, 90)
+        | ~df["lng"].between(-180, 180)
+        | df["lat"].eq(0)
+        | df["lng"].eq(0)
+    )
+
+    # Reviewed listing: coordinates conflict with its stated Baku location.
+    known_bad = df["listing_url"].eq("/items/4596070")
+
+    unreliable = invalid | known_bad
+
+    df.loc[unreliable, ["lat", "lng"]] = np.nan
+    df["coordinates_missing"] = unreliable.astype(int)
+
+    return df
+
 
 def clean(df):
     """
@@ -277,35 +299,125 @@ if __name__ == "__main__":
     
     rows_before = len(df)
     df = remove_duplicate_listings(df)
+    df = clean_coordinates(df)
 
     df = drop_leakage_columns(df)
 
-    remaining_leakage = [
-        column for column in LEAKAGE_COLUMNS
-        if column in df.columns
-    ]
+
+
+    # remaining_leakage = [
+    #     column for column in LEAKAGE_COLUMNS
+    #     if column in df.columns
+    # ]
 
     X, y = select_features(df)
 
-    print("\nFeature table shape:", X.shape)
-    print("Target shape:", y.shape)
-    print("Selected features:", X.columns.tolist())
 
-    forbidden = ["price", "unit_price", "total_price"]
+    print("\nMissing coordinates after cleaning:")
+    print(df[["lat", "lng"]].isna().sum())
+
+    print("Coordinate indicators:", df["coordinates_missing"].sum())
+    print("Rows retained:", len(df))
+    print("Feature table shape:", X.shape)
+
     print(
-        "Forbidden price columns in X:",
-        [column for column in forbidden if column in X.columns],
+        df.loc[
+            df["listing_url"].eq("/items/4596070"),
+            ["listing_url", "city", "lat", "lng", "coordinates_missing"],
+        ].to_string(index=False)
     )
 
-    print("Feature and target rows aligned:", X.index.equals(y.index))
+
+
+
+    # invalid_coordinates = (
+    #     ~df["lat"].between(-90, 90)
+    #     | ~df["lng"].between(-180, 180)
+    # )
+
+    # zero_coordinates = (
+    #     df["lat"].eq(0)
+    #     | df["lng"].eq(0)
+    # )
+
+    # print("\nMissing coordinates:")
+    # print(df[["lat", "lng"]].isna().sum())
+
+    # print("\nInvalid or missing coordinate rows:",
+    #       invalid_coordinates.sum())
+
+    # print("Rows with a zero coordinate:",
+    #       zero_coordinates.sum())
+
+    # print("\nCoordinate ranges:")
+    # print(df[["lat", "lng"]].agg(["min", "max"]))
+
+    # flagged = invalid_coordinates | zero_coordinates
+
+    # print("\nFlagged coordinate examples:")
+    # print(
+    #     df.loc[
+    #         flagged,
+    #         ["listing_url", "city", "lat", "lng"],
+    #     ].head(20).to_string(index=False)
+    # )
+    # coordinate_columns = [
+    #     "listing_url",
+    #     "city",
+    #     "location",
+    #     "lat",
+    #     "lng",
+    # ]
+
+    # print("\n10 lowest latitudes:")
+    # print(
+    #     df.nsmallest(10, "lat")[coordinate_columns]
+    #     .to_string(index=False)
+    # )
+
+    # print("\n10 lowest longitudes:")
+    # print(
+    #     df.nsmallest(10, "lng")[coordinate_columns]
+    #     .to_string(index=False)
+    # )
+
+    # invalid_rooms = (
+    #     df["rooms"].notna()
+    #     & (
+    #         (df["rooms"] <= 0)
+    #         | (df["rooms"] % 1 != 0)
+    #     )
+    # )
+
+    # print("\nInvalid room counts:", invalid_rooms.sum())
+
+    # print(
+    #     df.loc[
+    #         invalid_rooms,
+    #         ["listing_url", "property_category", "rooms", "area_m2"],
+    #     ].head(20).to_string(index=False)
+    # )
+
+    # print("\nRoom-count frequencies:")
+    # print(df["rooms"].value_counts(dropna=False).sort_index())
+
+    # print("\nFeature table shape:", X.shape)
+    # print("Target shape:", y.shape)
+    # print("Selected features:", X.columns.tolist())
+
+    # forbidden = ["price", "unit_price", "total_price"]
+    # print(
+    #     "Forbidden price columns in X:",
+    #     [column for column in forbidden if column in X.columns],
+    # )
+
+    # print("Feature and target rows aligned:", X.index.equals(y.index))
 
 
 
     # print("\nLeakage columns still present:", remaining_leakage)
     # print("Target price retained:", "price" in df.columns)
     # print("Rows after dropping columns:", len(df))
-
-
 
 
 

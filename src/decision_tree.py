@@ -171,6 +171,9 @@ class DecisionTree:
         if split is None:
             return node
         feature, threshold, decrease = split
+        # weighted decrease must be big enough (same definition as sklearn)
+        if len(y) / self._n_total * decrease < self.min_impurity_decrease:
+            return node
 
         self._importances[feature] += len(y) / self._n_total * decrease
 

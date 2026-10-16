@@ -346,6 +346,38 @@ def train_val_test_split(
         y.iloc[test_indices].copy(),
     )
 
+def fit_area_caps(X_train, quantile=0.99, min_count=100):
+    """Learn upper area limits from training data by property category."""
+    caps = {}
+
+    for column in ["area_m2", "land_area_m2"]:
+        grouped = X_train.groupby("property_category")[column]
+
+        counts = grouped.count()
+        limits = grouped.quantile(quantile)
+
+        caps[column] = limits[counts >= min_count].to_dict()
+
+    return caps
+
+
+def apply_area_caps(X, caps):
+    """Apply learned area limits without changing the input table."""
+    result = X.copy()
+
+    for column, category_limits in caps.items():
+        limits = result["property_category"].map(category_limits)
+
+        above_limit = (
+            result[column].notna()
+            & limits.notna()
+            & result[column].gt(limits)
+        )
+
+        result.loc[above_limit, column] = limits.loc[above_limit]
+
+    return result
+
 
 def standardize(X_tr, *others):
     """
@@ -367,29 +399,76 @@ if __name__ == "__main__":
     tier_val, _ = make_tier_label(y_val, threshold=threshold)
     tier_te, _ = make_tier_label(y_te, threshold=threshold)
 
-    print("\nSplit sizes:")
-    print("Training:", len(X_tr))
-    print("Validation:", len(X_val))
-    print("Test:", len(X_te))
 
-    print("\nTraining price threshold:", threshold)
+    area_caps = fit_area_caps(X_tr)
 
-    print("\nPremium percentage:")
-    print("Training:", round(tier_tr.mean() * 100, 2))
-    print("Validation:", round(tier_val.mean() * 100, 2))
-    print("Test:", round(tier_te.mean() * 100, 2))
+    X_tr_capped = apply_area_caps(X_tr, area_caps)
+    X_val_capped = apply_area_caps(X_val, area_caps)
+    X_te_capped = apply_area_caps(X_te, area_caps)
 
-    overlap = (
-        set(X_tr.index) & set(X_val.index)
-        | set(X_tr.index) & set(X_te.index)
-        | set(X_val.index) & set(X_te.index)
-    )
+    print("\nLearned area caps:")
+    for column, limits in area_caps.items():
+        print(column, limits)
 
-    print("\nOverlapping rows:", len(overlap))
-    print(
-        "All rows accounted for:",
-        len(X_tr) + len(X_val) + len(X_te) == len(X),
-    )
+    for name, original, capped in [
+        ("Training", X_tr, X_tr_capped),
+        ("Validation", X_val, X_val_capped),
+        ("Test", X_te, X_te_capped),
+    ]:
+        print(f"\n{name}:")
+        print("Rows preserved:", len(original) == len(capped))
+
+        for column in ["area_m2", "land_area_m2"]:
+            changed = (
+                original[column].notna()
+                & original[column].ne(capped[column])
+            )
+
+            print(f"{column} values capped:", changed.sum())
+
+
+
+
+
+    # for column in ["area_m2", "land_area_m2"]:
+    #     summary = (
+    #         X_tr.groupby("property_category")[column]
+    #         .describe(percentiles=[0.01, 0.25, 0.5, 0.75, 0.99])
+    #     )
+
+    #     print(f"\nTraining summary: {column}")
+    #     print(
+    #         summary[
+    #             ["count", "min", "1%", "25%", "50%", "75%", "99%", "max"]
+    #         ].round(2).to_string()
+    #     )
+
+
+
+
+    # print("\nSplit sizes:")
+    # print("Training:", len(X_tr))
+    # print("Validation:", len(X_val))
+    # print("Test:", len(X_te))
+
+    # print("\nTraining price threshold:", threshold)
+
+    # print("\nPremium percentage:")
+    # print("Training:", round(tier_tr.mean() * 100, 2))
+    # print("Validation:", round(tier_val.mean() * 100, 2))
+    # print("Test:", round(tier_te.mean() * 100, 2))
+
+    # overlap = (
+    #     set(X_tr.index) & set(X_val.index)
+    #     | set(X_tr.index) & set(X_te.index)
+    #     | set(X_val.index) & set(X_te.index)
+    # )
+
+    # print("\nOverlapping rows:", len(overlap))
+    # print(
+    #     "All rows accounted for:",
+    #     len(X_tr) + len(X_val) + len(X_te) == len(X),
+    # )
 
     # print("Raw rows:", len(raw_df))
     # print("Cleaned rows:", len(df))

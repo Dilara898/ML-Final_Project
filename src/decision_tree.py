@@ -106,6 +106,7 @@ class DecisionTree:
             n_left = np.arange(1, n)                      # left size if we cut after row i
             n_right = n - n_left
             valid = xs[:-1] != xs[1:]                     # can only cut between different values
+            valid = valid & (n_left >= self.min_samples_leaf) & (n_right >= self.min_samples_leaf)
             if not valid.any():
                 continue
 
@@ -170,6 +171,9 @@ class DecisionTree:
         if split is None:
             return node
         feature, threshold, decrease = split
+        # weighted decrease must be big enough (same definition as sklearn)
+        if len(y) / self._n_total * decrease < self.min_impurity_decrease:
+            return node
 
         self._importances[feature] += len(y) / self._n_total * decrease
 
@@ -216,6 +220,20 @@ class DecisionTree:
             return np.array(values, dtype=float)
         return self.classes_[np.argmax(np.vstack(values), axis=1)]
 
+    
     def predict_proba(self, X):
-        """Classification only: return class probabilities from leaf counts."""
-        raise NotImplementedError("TODO: predict_proba (classification)")
+        '''Classification only: return class probabilities from leaf counts.'''
+        if self.task != 'classification':
+            raise ValueError('predict_proba is only for classification')
+        X = np.asarray(X, dtype=float)
+        return np.vstack([self._predict_one(x, self.root) for x in X])
+
+    def get_depth(self) -> int:
+        def depth(node):
+            return 0 if node.is_leaf() else 1 + max(depth(node.left), depth(node.right))
+        return depth(self.root)
+
+    def get_n_leaves(self) -> int:
+        def leaves(node):
+            return 1 if node.is_leaf() else leaves(node.left) + leaves(node.right)
+        return leaves(self.root)

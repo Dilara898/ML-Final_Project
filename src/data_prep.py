@@ -446,13 +446,32 @@ def apply_category_encoder(X, categories):
     return pd.concat([result, encoded], axis=1)
 
 def standardize(X_tr, *others):
-    """
-    Standardize features using TRAIN statistics only (mean/std from X_tr),
-    then apply the same transform to the other splits.
-    Return the scaled arrays in the same order as given.
-    (Needed for the SVM; trees don't require it.)
-    """
-    raise NotImplementedError("TODO: standardize using train stats")
+    """Scale all splits using training means and standard deviations."""
+    train = np.asarray(X_tr, dtype=float)
+
+    if train.ndim != 2 or not np.isfinite(train).all():
+        raise ValueError("Training features must be a finite 2D array.")
+
+    means = train.mean(axis=0)
+    stds = train.std(axis=0)
+
+    # Avoid division by zero for columns constant in training.
+    safe_stds = np.where(stds == 0, 1.0, stds)
+
+    scaled = [(train - means) / safe_stds]
+
+    for X in others:
+        values = np.asarray(X, dtype=float)
+
+        if values.ndim != 2 or values.shape[1] != train.shape[1]:
+            raise ValueError("All splits must have the same feature count.")
+
+        if not np.isfinite(values).all():
+            raise ValueError("Features must contain only finite values.")
+
+        scaled.append((values - means) / safe_stds)
+
+    return tuple(scaled)
 
 if __name__ == "__main__":
     raw_df = load_raw()
@@ -485,34 +504,70 @@ if __name__ == "__main__":
     X_val_encoded = apply_category_encoder(X_val_filled, categories)
     X_te_encoded = apply_category_encoder(X_te_filled, categories)
 
-    print("\nCategories learned per feature:")
-    for column, values in categories.items():
-        print(column, len(values))
-
-    print("\nEncoded shapes:")
-    print("Training:", X_tr_encoded.shape)
-    print("Validation:", X_val_encoded.shape)
-    print("Test:", X_te_encoded.shape)
-
-    same_columns = (
-        X_tr_encoded.columns.equals(X_val_encoded.columns)
-        and X_tr_encoded.columns.equals(X_te_encoded.columns)
+    X_tr_scaled, X_val_scaled, X_te_scaled = standardize(
+        X_tr_encoded,
+        X_val_encoded,
+        X_te_encoded,
     )
-    print("\nIdentical feature columns:", same_columns)
 
-    for name, before, after in [
-        ("Training", X_tr_filled, X_tr_encoded),
-        ("Validation", X_val_filled, X_val_encoded),
-        ("Test", X_te_filled, X_te_encoded),
+    feature_names = X_tr_encoded.columns.tolist()
+
+    varying = X_tr_encoded.to_numpy().std(axis=0) > 0
+
+    print("\nScaled shapes:")
+    print("Training:", X_tr_scaled.shape)
+    print("Validation:", X_val_scaled.shape)
+    print("Test:", X_te_scaled.shape)
+
+    print(
+        "\nTraining means approximately zero:",
+        np.allclose(X_tr_scaled.mean(axis=0), 0, atol=1e-8),
+    )
+
+    print(
+        "Nonconstant training standard deviations approximately one:",
+        np.allclose(
+            X_tr_scaled.std(axis=0)[varying],
+            1,
+            atol=1e-8,
+        ),
+    )
+
+    for name, values in [
+        ("Training", X_tr_scaled),
+        ("Validation", X_val_scaled),
+        ("Test", X_te_scaled),
     ]:
-        print(f"\n{name}:")
-        print("All values finite:", np.isfinite(after.to_numpy()).all())
-        print("Rows and order preserved:", before.index.equals(after.index))
+        print(f"{name} values finite:", np.isfinite(values).all())
 
-        for column in CATEGORICAL_FEATURES:
-            values = before[column].astype("string").fillna("unknown")
-            unseen = ~values.isin(categories[column])
-            print(f"Unseen {column} values:", unseen.sum())
+    # print("\nCategories learned per feature:")
+    # for column, values in categories.items():
+    #     print(column, len(values))
+
+    # print("\nEncoded shapes:")
+    # print("Training:", X_tr_encoded.shape)
+    # print("Validation:", X_val_encoded.shape)
+    # print("Test:", X_te_encoded.shape)
+
+    # same_columns = (
+    #     X_tr_encoded.columns.equals(X_val_encoded.columns)
+    #     and X_tr_encoded.columns.equals(X_te_encoded.columns)
+    # )
+    # print("\nIdentical feature columns:", same_columns)
+
+    # for name, before, after in [
+    #     ("Training", X_tr_filled, X_tr_encoded),
+    #     ("Validation", X_val_filled, X_val_encoded),
+    #     ("Test", X_te_filled, X_te_encoded),
+    # ]:
+    #     print(f"\n{name}:")
+    #     print("All values finite:", np.isfinite(after.to_numpy()).all())
+    #     print("Rows and order preserved:", before.index.equals(after.index))
+
+    #     for column in CATEGORICAL_FEATURES:
+    #         values = before[column].astype("string").fillna("unknown")
+    #         unseen = ~values.isin(categories[column])
+    #         print(f"Unseen {column} values:", unseen.sum())
 
     # print("\nOverall training medians:")
     # print(imputer["overall_medians"])

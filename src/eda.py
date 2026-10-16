@@ -369,8 +369,8 @@ def plot_class_balance(data):
 
 
 
-if __name__ == "__main__":
-    data = prepare_data()
+def generate_eda(data):
+    """Generate all required EDA figures from prepared project data."""
     training_df = data["training_df"]
 
     plot_price_distributions(training_df)
@@ -378,4 +378,8 @@ if __name__ == "__main__":
     plot_rooms(training_df)
     plot_geographic_prices(training_df)
     plot_class_balance(data)
-    
+
+
+if __name__ == "__main__":
+    data = prepare_data()
+    generate_eda(data)

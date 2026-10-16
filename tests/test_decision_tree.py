@@ -126,3 +126,32 @@ def test_importance_finds_the_useful_feature():
     t = DecisionTree(max_depth=3).fit(X, y)
     assert t.feature_importances_.argmax() == 2
     assert t.feature_importances_.sum() == pytest.approx(1.0)
+@pytest.mark.parametrize('crit', ['gini', 'entropy'])
+def test_matches_sklearn_classification(crit):
+    sk = pytest.importorskip('sklearn.tree')
+    rng = np.random.default_rng(10)
+    X = rng.normal(size=(400, 5))
+    y = ((X[:, 0] + 0.5 * X[:, 1] + rng.normal(scale=0.7, size=400)) > 0).astype(int)
+    Xte = rng.normal(size=(200, 5))
+
+    # depth 3 on purpose: deeper nodes can hold a few rows where two splits tie exactly,
+    # and then sklearn and we may legitimately pick different (equally good) splits.
+    ours = DecisionTree(criterion=crit, max_depth=3).fit(X, y)
+    ref = sk.DecisionTreeClassifier(criterion=crit, max_depth=3, random_state=0).fit(X, y)
+
+    assert np.array_equal(ours.predict(Xte), ref.predict(Xte))
+    assert np.allclose(ours.feature_importances_, ref.feature_importances_, atol=1e-6)
+
+
+def test_matches_sklearn_regression():
+    sk = pytest.importorskip('sklearn.tree')
+    rng = np.random.default_rng(11)
+    X = rng.normal(size=(400, 5))
+    y = 2 * X[:, 0] - X[:, 1] ** 2 + rng.normal(scale=0.3, size=400)
+    Xte = rng.normal(size=(200, 5))
+
+    ours = DecisionTree(task='regression', criterion='mse', max_depth=3).fit(X, y)
+    ref = sk.DecisionTreeRegressor(max_depth=3, random_state=0).fit(X, y)
+
+    assert np.allclose(ours.predict(Xte), ref.predict(Xte), atol=1e-6)
+    assert np.allclose(ours.feature_importances_, ref.feature_importances_, atol=1e-6)

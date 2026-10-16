@@ -280,22 +280,71 @@ def make_features(df):
 
 
 def make_tier_label(y_price, threshold=None):
-    """
-    Derived classification target: price TIER (premium vs standard).
-    Use the MEDIAN of the TRAINING price as the split threshold.
-      - premium = 1 (price >  threshold), standard = 0.
-    Return (y_tier, threshold).  The threshold must come from TRAIN only
-    (no peeking at val/test) to avoid leakage.
-    """
-    raise NotImplementedError("TODO: derive the price-tier label")
+    """Create price tiers; learn the threshold only from training prices."""
+    prices = np.asarray(y_price, dtype=float)
+
+    if prices.size == 0 or not np.isfinite(prices).all():
+        raise ValueError("Prices must be non-empty and finite.")
+
+    if threshold is None:
+        threshold = float(np.median(prices))
+
+    y_tier = (prices > threshold).astype(int)
+
+    return y_tier, threshold
 
 
-def train_val_test_split(X, y, val_size=0.15, test_size=0.15, seed=SEED):
-    """
-    Deterministic split into train / validation / test.
-    Return (X_tr, y_tr, X_val, y_val, X_te, y_te).
-    """
-    raise NotImplementedError("TODO: split the data")
+def train_val_test_split(
+    X, y, val_size=0.15, test_size=0.15, seed=SEED
+):
+    """Select training first, then stratify validation/test by price tier."""
+    if not (0 < val_size < 1 and 0 < test_size < 1):
+        raise ValueError("Validation and test fractions must be between 0 and 1.")
+
+    if val_size + test_size >= 1:
+        raise ValueError("Validation and test fractions must sum to less than 1.")
+
+    if len(X) != len(y) or not X.index.equals(y.index):
+        raise ValueError("X and y must have matching rows and indices.")
+
+    rng = np.random.default_rng(seed)
+    indices = rng.permutation(len(X))
+
+    n_train = int(len(X) * (1 - val_size - test_size))
+    train_indices = indices[:n_train]
+    remaining_indices = indices[n_train:]
+
+    _, threshold = make_tier_label(y.iloc[train_indices])
+
+    remaining_tiers, _ = make_tier_label(
+        y.iloc[remaining_indices], threshold=threshold
+    )
+
+    validation_parts = []
+    test_parts = []
+
+    validation_fraction = val_size / (val_size + test_size)
+
+    for label in [0, 1]:
+        class_indices = remaining_indices[remaining_tiers == label]
+        class_indices = rng.permutation(class_indices)
+
+        n_validation = int(len(class_indices) * validation_fraction)
+
+        validation_parts.append(class_indices[:n_validation])
+        test_parts.append(class_indices[n_validation:])
+
+    val_indices = rng.permutation(np.concatenate(validation_parts))
+    test_indices = rng.permutation(np.concatenate(test_parts))
+
+    return (
+        X.iloc[train_indices].copy(),
+        y.iloc[train_indices].copy(),
+        X.iloc[val_indices].copy(),
+        y.iloc[val_indices].copy(),
+        X.iloc[test_indices].copy(),
+        y.iloc[test_indices].copy(),
+    )
 
 
 def standardize(X_tr, *others):
@@ -312,12 +361,42 @@ if __name__ == "__main__":
     df = clean(raw_df)
     X, y = select_features(df)
 
-    print("Raw rows:", len(raw_df))
-    print("Cleaned rows:", len(df))
-    print("Feature table shape:", X.shape)
-    print("Target shape:", y.shape)
-    print("Repeated URLs:", df["listing_url"].duplicated().sum())
-    print("Rows aligned:", X.index.equals(y.index))
+    X_tr, y_tr, X_val, y_val, X_te, y_te = train_val_test_split(X, y)
+
+    tier_tr, threshold = make_tier_label(y_tr)
+    tier_val, _ = make_tier_label(y_val, threshold=threshold)
+    tier_te, _ = make_tier_label(y_te, threshold=threshold)
+
+    print("\nSplit sizes:")
+    print("Training:", len(X_tr))
+    print("Validation:", len(X_val))
+    print("Test:", len(X_te))
+
+    print("\nTraining price threshold:", threshold)
+
+    print("\nPremium percentage:")
+    print("Training:", round(tier_tr.mean() * 100, 2))
+    print("Validation:", round(tier_val.mean() * 100, 2))
+    print("Test:", round(tier_te.mean() * 100, 2))
+
+    overlap = (
+        set(X_tr.index) & set(X_val.index)
+        | set(X_tr.index) & set(X_te.index)
+        | set(X_val.index) & set(X_te.index)
+    )
+
+    print("\nOverlapping rows:", len(overlap))
+    print(
+        "All rows accounted for:",
+        len(X_tr) + len(X_val) + len(X_te) == len(X),
+    )
+
+    # print("Raw rows:", len(raw_df))
+    # print("Cleaned rows:", len(df))
+    # print("Feature table shape:", X.shape)
+    # print("Target shape:", y.shape)
+    # print("Repeated URLs:", df["listing_url"].duplicated().sum())
+    # print("Rows aligned:", X.index.equals(y.index))
 
     # rows_before = len(df)
     # rows_before_billing_filter = len(df)

@@ -269,14 +269,90 @@ def clean(df):
     return df
 
 
-def make_features(df):
+def make_features(df, preprocessing=None):
     """
-    Turn the cleaned frame into a numeric design matrix.
-      - encode categoricals (one-hot / ordinal — your choice, justify it),
-      - assemble X (features) and y (target `price`).
-    Return (X, y, feature_names).
+    Build numerical features and return (X, y, feature_names).
+
+    df must already be cleaned.
+    preprocessing must contain settings fitted on training data.
     """
-    raise NotImplementedError("TODO: build X, y")
+    if preprocessing is None:
+        raise ValueError(
+            "Pass training-fitted preprocessing. "
+            "Split the data before building numerical features."
+        )
+
+    X, y = select_features(df)
+
+    X = apply_area_caps(X, preprocessing["area_caps"])
+    X = apply_numeric_imputer(X, preprocessing["imputer"])
+    X = apply_category_encoder(X, preprocessing["categories"])
+
+    return X, y, X.columns.tolist()
+
+def prepare_data(path=DATA_PATH, seed=SEED):
+    """Run cleaning, splitting, feature preparation, and scaling."""
+    raw_df = load_raw(path)
+    df = clean(raw_df)
+
+    X, y = select_features(df)
+
+    X_tr, y_tr, X_val, y_val, X_te, y_te = train_val_test_split(
+        X, y, seed=seed
+    )
+
+    tier_tr, threshold = make_tier_label(y_tr)
+    tier_val, _ = make_tier_label(y_val, threshold=threshold)
+    tier_te, _ = make_tier_label(y_te, threshold=threshold)
+
+    # Learn each preprocessing step from training data only.
+    area_caps = fit_area_caps(X_tr)
+    X_tr_capped = apply_area_caps(X_tr, area_caps)
+
+    imputer = fit_numeric_imputer(X_tr_capped)
+    X_tr_filled = apply_numeric_imputer(X_tr_capped, imputer)
+
+    categories = fit_category_encoder(X_tr_filled)
+
+    preprocessing = {
+        "area_caps": area_caps,
+        "imputer": imputer,
+        "categories": categories,
+    }
+
+    # Apply the same learned settings to every split.
+    X_tr_encoded, _, feature_names = make_features(
+        df.loc[X_tr.index], preprocessing
+    )
+    X_val_encoded, _, _ = make_features(
+        df.loc[X_val.index], preprocessing
+    )
+    X_te_encoded, _, _ = make_features(
+        df.loc[X_te.index], preprocessing
+    )
+
+    X_tr_scaled, X_val_scaled, X_te_scaled = standardize(
+        X_tr_encoded, X_val_encoded, X_te_encoded
+    )
+
+    return {
+        "X_train": X_tr_encoded,
+        "X_val": X_val_encoded,
+        "X_test": X_te_encoded,
+        "X_train_scaled": X_tr_scaled,
+        "X_val_scaled": X_val_scaled,
+        "X_test_scaled": X_te_scaled,
+        "y_train": y_tr,
+        "y_val": y_val,
+        "y_test": y_te,
+        "tier_train": tier_tr,
+        "tier_val": tier_val,
+        "tier_test": tier_te,
+        "tier_threshold": threshold,
+        "feature_names": feature_names,
+        "preprocessing": preprocessing,
+        "training_df": df.loc[X_tr.index].copy(),
+    }
 
 
 def make_tier_label(y_price, threshold=None):
@@ -474,71 +550,49 @@ def standardize(X_tr, *others):
     return tuple(scaled)
 
 if __name__ == "__main__":
-    raw_df = load_raw()
-    df = clean(raw_df)
-    X, y = select_features(df)
+    data = prepare_data()
 
-    X_tr, y_tr, X_val, y_val, X_te, y_te = train_val_test_split(X, y)
+    for split in ["train", "val", "test"]:
+        X = data[f"X_{split}"]
+        y = data[f"y_{split}"]
+        tiers = data[f"tier_{split}"]
+        scaled = data[f"X_{split}_scaled"]
 
-    tier_tr, threshold = make_tier_label(y_tr)
-    tier_val, _ = make_tier_label(y_val, threshold=threshold)
-    tier_te, _ = make_tier_label(y_te, threshold=threshold)
+        print(f"\n{split.upper()}")
+        print("Feature shape:", X.shape)
+        print("Rows aligned:", X.index.equals(y.index))
+        print("Tier count matches:", len(tiers) == len(y))
+        print("Encoded values finite:", np.isfinite(X.to_numpy()).all())
+        print("Scaled values finite:", np.isfinite(scaled).all())
 
+    print("\nTier threshold:", data["tier_threshold"])
+    print("Feature count:", len(data["feature_names"]))
 
-    area_caps = fit_area_caps(X_tr)
+    # print("\nScaled shapes:")
+    # print("Training:", X_tr_scaled.shape)
+    # print("Validation:", X_val_scaled.shape)
+    # print("Test:", X_te_scaled.shape)
 
-    X_tr_capped = apply_area_caps(X_tr, area_caps)
-    X_val_capped = apply_area_caps(X_val, area_caps)
-    X_te_capped = apply_area_caps(X_te, area_caps)
+    # print(
+    #     "\nTraining means approximately zero:",
+    #     np.allclose(X_tr_scaled.mean(axis=0), 0, atol=1e-8),
+    # )
 
-    imputer = fit_numeric_imputer(X_tr_capped)
+    # print(
+    #     "Nonconstant training standard deviations approximately one:",
+    #     np.allclose(
+    #         X_tr_scaled.std(axis=0)[varying],
+    #         1,
+    #         atol=1e-8,
+    #     ),
+    # )
 
-    X_tr_filled = apply_numeric_imputer(X_tr_capped, imputer)
-    X_val_filled = apply_numeric_imputer(X_val_capped, imputer)
-    X_te_filled = apply_numeric_imputer(X_te_capped, imputer)
-
-
-    categories = fit_category_encoder(X_tr_filled)
-
-    X_tr_encoded = apply_category_encoder(X_tr_filled, categories)
-    X_val_encoded = apply_category_encoder(X_val_filled, categories)
-    X_te_encoded = apply_category_encoder(X_te_filled, categories)
-
-    X_tr_scaled, X_val_scaled, X_te_scaled = standardize(
-        X_tr_encoded,
-        X_val_encoded,
-        X_te_encoded,
-    )
-
-    feature_names = X_tr_encoded.columns.tolist()
-
-    varying = X_tr_encoded.to_numpy().std(axis=0) > 0
-
-    print("\nScaled shapes:")
-    print("Training:", X_tr_scaled.shape)
-    print("Validation:", X_val_scaled.shape)
-    print("Test:", X_te_scaled.shape)
-
-    print(
-        "\nTraining means approximately zero:",
-        np.allclose(X_tr_scaled.mean(axis=0), 0, atol=1e-8),
-    )
-
-    print(
-        "Nonconstant training standard deviations approximately one:",
-        np.allclose(
-            X_tr_scaled.std(axis=0)[varying],
-            1,
-            atol=1e-8,
-        ),
-    )
-
-    for name, values in [
-        ("Training", X_tr_scaled),
-        ("Validation", X_val_scaled),
-        ("Test", X_te_scaled),
-    ]:
-        print(f"{name} values finite:", np.isfinite(values).all())
+    # for name, values in [
+    #     ("Training", X_tr_scaled),
+    #     ("Validation", X_val_scaled),
+    #     ("Test", X_te_scaled),
+    # ]:
+    #     print(f"{name} values finite:", np.isfinite(values).all())
 
     # print("\nCategories learned per feature:")
     # for column, values in categories.items():

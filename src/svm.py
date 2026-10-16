@@ -63,18 +63,18 @@ class PegasosSVM:
         n, d = X.shape
         Xb = np.hstack([X, np.ones((n, 1))])
 
-        # random  value
+        # random w value
         rng = np.random.default_rng(self.random_state)
         w = np.zeros(d + 1)          # son element = bias
 
-        # 4) Pegasos dövrü
+        # w
         for t in range(1, self.n_iters + 1):
-            i = rng.integers(n)                      # təsadüfi bir nümunə
-            eta = 1.0 / (self.lambda_ * t)           # öyrənmə sürəti
-            margin = y_pm[i] * (Xb[i] @ w)           # köhnə w ilə marja
-            w *= (1 - eta * self.lambda_)            # həmişə: w-ni kiçilt
-            if margin < 1:                           # səhvdir və ya sərhədə yaxındır
-                w += eta * y_pm[i] * Xb[i]           # w-ni bu nümunəyə doğru it
+            i = rng.integers(n)                      
+            eta = 1.0 / (self.lambda_ * t)           
+            margin = y_pm[i] * (Xb[i] @ w)           
+            w *= (1 - eta * self.lambda_)           
+            if margin < 1:                           
+                w += eta * y_pm[i] * Xb[i]           
 
         
         self.w = w[:-1]

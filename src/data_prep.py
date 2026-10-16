@@ -255,16 +255,18 @@ def exclude_ambiguous_prices(df):
 
 
 def clean(df):
-    """
-    Clean the raw frame:
-      - fix dtypes (prices/areas to numeric; strip currency/text),
-      - handle missing values,
-      - drop duplicates,
-      - handle outliers (document your rule),
-      - drop LEAKAGE_COLUMNS.
-    Return the cleaned DataFrame.
-    """
-    raise NotImplementedError("TODO: clean the data")
+    """Apply fixed cleaning rules without learning training statistics."""
+    df = translate_columns(df)
+    df = parse_floors(df)
+    df = parse_area(df)
+    df = parse_land_area(df)
+    df = prepare_missing_values(df)
+    df = remove_duplicate_listings(df)
+    df = exclude_ambiguous_prices(df)
+    df = clean_coordinates(df)
+    df = drop_leakage_columns(df)
+
+    return df
 
 
 def make_features(df):
@@ -307,36 +309,29 @@ def standardize(X_tr, *others):
 
 if __name__ == "__main__":
     raw_df = load_raw()
-    df = translate_columns(raw_df)
-    df = parse_floors(df)
-    df = parse_area(df)
-    df = parse_land_area(df)
-    df = prepare_missing_values(df)
-    
-    rows_before = len(df)
-    df = remove_duplicate_listings(df)
-    rows_before_billing_filter = len(df)
-    df = exclude_ambiguous_prices(df)
-
-    df = clean_coordinates(df)
-
-    df = drop_leakage_columns(df)
-
+    df = clean(raw_df)
     X, y = select_features(df)
 
-
-
-    print(
-        "\nAmbiguous-price rows excluded:",
-        rows_before_billing_filter - len(df),
-    )
-    print(
-        "Flagged listings remaining:",
-        df["listing_url"].isin(AMBIGUOUS_PRICE_LISTINGS).sum(),
-    )
-    print("Rows retained:", len(df))
+    print("Raw rows:", len(raw_df))
+    print("Cleaned rows:", len(df))
     print("Feature table shape:", X.shape)
     print("Target shape:", y.shape)
+    print("Repeated URLs:", df["listing_url"].duplicated().sum())
+    print("Rows aligned:", X.index.equals(y.index))
+
+    # rows_before = len(df)
+    # rows_before_billing_filter = len(df)
+    # print(
+    #     "\nAmbiguous-price rows excluded:",
+    #     rows_before_billing_filter - len(df),
+    # )
+    # print(
+    #     "Flagged listings remaining:",
+    #     df["listing_url"].isin(AMBIGUOUS_PRICE_LISTINGS).sum(),
+    # )
+    # print("Rows retained:", len(df))
+    # print("Feature table shape:", X.shape)
+    # print("Target shape:", y.shape)
     # remaining_leakage = [
     #     column for column in LEAKAGE_COLUMNS
     #     if column in df.columns

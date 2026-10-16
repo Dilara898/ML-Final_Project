@@ -219,4 +219,13 @@ class DecisionTree:
 
     def predict_proba(self, X):
         """Classification only: return class probabilities from leaf counts."""
-        raise NotImplementedError("TODO: predict_proba (classification)")
+
+    def get_depth(self) -> int:
+        def depth(node):
+            return 0 if node.is_leaf() else 1 + max(depth(node.left), depth(node.right))
+        return depth(self.root)
+
+    def get_n_leaves(self) -> int:
+        def leaves(node):
+            return 1 if node.is_leaf() else leaves(node.left) + leaves(node.right)
+        return leaves(self.root)

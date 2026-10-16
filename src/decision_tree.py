@@ -106,6 +106,7 @@ class DecisionTree:
             n_left = np.arange(1, n)                      # left size if we cut after row i
             n_right = n - n_left
             valid = xs[:-1] != xs[1:]                     # can only cut between different values
+            valid = valid & (n_left >= self.min_samples_leaf) & (n_right >= self.min_samples_leaf)
             if not valid.any():
                 continue
 

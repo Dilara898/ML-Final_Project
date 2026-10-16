@@ -104,3 +104,9 @@ def test_min_samples_split_is_respected():
     t = DecisionTree(min_samples_split=50).fit(X, y)
     big = DecisionTree().fit(X, y)
     assert t.get_n_leaves() < big.get_n_leaves()
+def test_min_impurity_decrease_can_stop_all_splits():
+    rng = np.random.default_rng(6)
+    X = rng.normal(size=(100, 3))
+    y = rng.integers(0, 2, 100)
+    t = DecisionTree(min_impurity_decrease=0.9).fit(X, y)
+    assert t.root.is_leaf()

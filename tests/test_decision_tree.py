@@ -110,3 +110,19 @@ def test_min_impurity_decrease_can_stop_all_splits():
     y = rng.integers(0, 2, 100)
     t = DecisionTree(min_impurity_decrease=0.9).fit(X, y)
     assert t.root.is_leaf()
+def test_predict_proba_rows_sum_to_one():
+    rng = np.random.default_rng(1)
+    X = rng.normal(size=(100, 3))
+    y = (X[:, 0] + rng.normal(scale=0.5, size=100) > 0).astype(int)
+    p = DecisionTree(max_depth=3).fit(X, y).predict_proba(X)
+    assert p.shape == (100, 2)
+    assert np.allclose(p.sum(axis=1), 1.0)
+
+
+def test_importance_finds_the_useful_feature():
+    rng = np.random.default_rng(7)
+    X = rng.normal(size=(300, 4))
+    y = (X[:, 2] > 0).astype(int)                 # only feature 2 matters
+    t = DecisionTree(max_depth=3).fit(X, y)
+    assert t.feature_importances_.argmax() == 2
+    assert t.feature_importances_.sum() == pytest.approx(1.0)

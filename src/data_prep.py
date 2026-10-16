@@ -413,7 +413,37 @@ def apply_numeric_imputer(X, imputer):
 
     return result
 
+def fit_category_encoder(X_train):
+    """Learn categorical values from training data only."""
+    categories = {}
 
+    for column in CATEGORICAL_FEATURES:
+        values = (
+            X_train[column]
+            .astype("string")
+            .fillna("unknown")
+        )
+
+        categories[column] = sorted(values.unique().tolist())
+
+    return categories
+
+
+def apply_category_encoder(X, categories):
+    """Create identical numerical feature columns for every split."""
+    result = X[NUMERIC_FEATURES + MISSING_INDICATORS].astype(float).copy()
+    encoded_columns = {}
+
+    for column in CATEGORICAL_FEATURES:
+        values = X[column].astype("string").fillna("unknown")
+
+        for category in categories[column]:
+            name = f"{column}={category}"
+            encoded_columns[name] = values.eq(category).astype(float)
+
+    encoded = pd.DataFrame(encoded_columns, index=X.index)
+
+    return pd.concat([result, encoded], axis=1)
 
 def standardize(X_tr, *others):
     """
@@ -448,32 +478,68 @@ if __name__ == "__main__":
     X_val_filled = apply_numeric_imputer(X_val_capped, imputer)
     X_te_filled = apply_numeric_imputer(X_te_capped, imputer)
 
-    print("\nOverall training medians:")
-    print(imputer["overall_medians"])
+
+    categories = fit_category_encoder(X_tr_filled)
+
+    X_tr_encoded = apply_category_encoder(X_tr_filled, categories)
+    X_val_encoded = apply_category_encoder(X_val_filled, categories)
+    X_te_encoded = apply_category_encoder(X_te_filled, categories)
+
+    print("\nCategories learned per feature:")
+    for column, values in categories.items():
+        print(column, len(values))
+
+    print("\nEncoded shapes:")
+    print("Training:", X_tr_encoded.shape)
+    print("Validation:", X_val_encoded.shape)
+    print("Test:", X_te_encoded.shape)
+
+    same_columns = (
+        X_tr_encoded.columns.equals(X_val_encoded.columns)
+        and X_tr_encoded.columns.equals(X_te_encoded.columns)
+    )
+    print("\nIdentical feature columns:", same_columns)
 
     for name, before, after in [
-        ("Training", X_tr_capped, X_tr_filled),
-        ("Validation", X_val_capped, X_val_filled),
-        ("Test", X_te_capped, X_te_filled),
+        ("Training", X_tr_filled, X_tr_encoded),
+        ("Validation", X_val_filled, X_val_encoded),
+        ("Test", X_te_filled, X_te_encoded),
     ]:
-        observed = before[NUMERIC_FEATURES].notna()
-
-        changed_observed = (
-            before[NUMERIC_FEATURES].ne(after[NUMERIC_FEATURES])
-            & observed
-        ).sum().sum()
-
         print(f"\n{name}:")
-        print(
-            "Numerical missing values remaining:",
-            after[NUMERIC_FEATURES].isna().sum().sum(),
-        )
-        print("Observed values changed:", changed_observed)
+        print("All values finite:", np.isfinite(after.to_numpy()).all())
         print("Rows and order preserved:", before.index.equals(after.index))
-        print(
-            "Missingness indicators preserved:",
-            before[MISSING_INDICATORS].equals(after[MISSING_INDICATORS]),
-        )
+
+        for column in CATEGORICAL_FEATURES:
+            values = before[column].astype("string").fillna("unknown")
+            unseen = ~values.isin(categories[column])
+            print(f"Unseen {column} values:", unseen.sum())
+
+    # print("\nOverall training medians:")
+    # print(imputer["overall_medians"])
+
+    # for name, before, after in [
+    #     ("Training", X_tr_capped, X_tr_filled),
+    #     ("Validation", X_val_capped, X_val_filled),
+    #     ("Test", X_te_capped, X_te_filled),
+    # ]:
+    #     observed = before[NUMERIC_FEATURES].notna()
+
+    #     changed_observed = (
+    #         before[NUMERIC_FEATURES].ne(after[NUMERIC_FEATURES])
+    #         & observed
+    #     ).sum().sum()
+
+    #     print(f"\n{name}:")
+    #     print(
+    #         "Numerical missing values remaining:",
+    #         after[NUMERIC_FEATURES].isna().sum().sum(),
+    #     )
+    #     print("Observed values changed:", changed_observed)
+    #     print("Rows and order preserved:", before.index.equals(after.index))
+    #     print(
+    #         "Missingness indicators preserved:",
+    #         before[MISSING_INDICATORS].equals(after[MISSING_INDICATORS]),
+    #     )
 
 
 

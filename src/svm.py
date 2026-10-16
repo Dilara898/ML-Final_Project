@@ -97,3 +97,10 @@ class PegasosSVM:
     def predict(self, X):
         scores = self.decision_function(X)
         return self.classes_[(scores >= 0).astype(int)]
+    def margin_width(self):
+        return 2.0 / np.linalg.norm(self.w)
+
+    def support_vector_mask(self, X, y):
+        y_pm = self._to_pm1(y, self.classes_)
+        margins = y_pm * self.decision_function(X)
+        return margins <= 1

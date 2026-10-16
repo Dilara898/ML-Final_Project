@@ -82,9 +82,9 @@ class PegasosSVM:
         return self
 
     def decision_function(self, X):
-        """Return the signed margin  w . x + b  for each row."""
-        raise NotImplementedError("TODO: decision_function")
+        X = np.asarray(X, dtype=float)
+        return X @ self.w + self.b
 
     def predict(self, X):
-        """Return class labels (map sign of decision_function back to your labels)."""
-        raise NotImplementedError("TODO: predict")
+        scores = self.decision_function(X)
+        return self.classes_[(scores >= 0).astype(int)]

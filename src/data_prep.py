@@ -48,6 +48,16 @@ BILLING_REVIEW_IDS = {
     "189e08a6-095e-49c1-97a6-1d2fd90578d2",
     "92985fed-de67-4547-838e-2b551388a4ed",
 }
+AMBIGUOUS_PRICE_LISTINGS = {
+    "/items/4656308": (
+        "Rental offer with equipment; listed price is 23000 AZN "
+        "but stated rent is 2000 AZN. Sale-price meaning is unclear."
+    ),
+    "/items/4604180": (
+        "Description offers the property for rent but also addresses "
+        "buyers. The meaning of the listed 510000 AZN is unclear."
+    ),
+}
 
 NUMERIC_FEATURES = [
     "area_m2",
@@ -237,6 +247,12 @@ def clean_coordinates(df):
 
     return df
 
+def exclude_ambiguous_prices(df):
+    """Exclude manually reviewed listings with unclear sale-price targets."""
+    excluded = df["listing_url"].isin(AMBIGUOUS_PRICE_LISTINGS)
+
+    return df.loc[~excluded].copy().reset_index(drop=True)
+
 
 def clean(df):
     """
@@ -299,33 +315,78 @@ if __name__ == "__main__":
     
     rows_before = len(df)
     df = remove_duplicate_listings(df)
+    rows_before_billing_filter = len(df)
+    df = exclude_ambiguous_prices(df)
+
     df = clean_coordinates(df)
 
     df = drop_leakage_columns(df)
 
+    X, y = select_features(df)
 
 
+
+    print(
+        "\nAmbiguous-price rows excluded:",
+        rows_before_billing_filter - len(df),
+    )
+    print(
+        "Flagged listings remaining:",
+        df["listing_url"].isin(AMBIGUOUS_PRICE_LISTINGS).sum(),
+    )
+    print("Rows retained:", len(df))
+    print("Feature table shape:", X.shape)
+    print("Target shape:", y.shape)
     # remaining_leakage = [
     #     column for column in LEAKAGE_COLUMNS
     #     if column in df.columns
     # ]
 
-    X, y = select_features(df)
+    
 
+    # review_urls = (
+    #     raw_df.loc[
+    #         raw_df["estate_id"].isin(BILLING_REVIEW_IDS),
+    #         "estate_rel_url_x",
+    #     ]
+    #     .astype("string")
+    #     .str.strip()
+    #     .dropna()
+    #     .unique()
+    # )
 
-    print("\nMissing coordinates after cleaning:")
-    print(df[["lat", "lng"]].isna().sum())
+    # print("\nListing URLs requiring billing review:")
+    # print(review_urls)
 
-    print("Coordinate indicators:", df["coordinates_missing"].sum())
-    print("Rows retained:", len(df))
-    print("Feature table shape:", X.shape)
+    # review_rows = df.loc[
+    #     df["listing_url"].isin(review_urls),
+    #     [
+    #         "listing_url",
+    #         "property_category",
+    #         "price",
+    #         "description",
+    #     ],
+    # ]
 
-    print(
-        df.loc[
-            df["listing_url"].eq("/items/4596070"),
-            ["listing_url", "city", "lat", "lng", "coordinates_missing"],
-        ].to_string(index=False)
-    )
+    # for _, row in review_rows.iterrows():
+    #     print("\nListing:", row["listing_url"])
+    #     print("Category:", row["property_category"])
+    #     print("Price:", row["price"])
+    #     print("Description:", row["description"])
+
+    # print("\nMissing coordinates after cleaning:")
+    # print(df[["lat", "lng"]].isna().sum())
+
+    # print("Coordinate indicators:", df["coordinates_missing"].sum())
+    # print("Rows retained:", len(df))
+    # print("Feature table shape:", X.shape)
+
+    # print(
+    #     df.loc[
+    #         df["listing_url"].eq("/items/4596070"),
+    #         ["listing_url", "city", "lat", "lng", "coordinates_missing"],
+    #     ].to_string(index=False)
+    # )
 
 
 

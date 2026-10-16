@@ -14,8 +14,15 @@ def test_fit_runs():
     m = PegasosSVM(lambda_=0.1, n_iters=200, random_state=0).fit(X, y)
     assert m.w.shape == (2,)
 
-
+def test_objective_decreases():
+    rng = np.random.default_rng(0)
+    X = np.vstack([rng.normal(-2, 1, (100, 2)), rng.normal(2, 1, (100, 2))])
+    y = np.array([0] * 100 + [1] * 100)
+    m = PegasosSVM(lambda_=0.01, n_iters=5000, random_state=42).fit(X, y)
+    assert len(m.history_) > 0
+    assert m.history_[-1][1] < 1.0
 if __name__ == "__main__":
     test_to_pm1()
     test_fit_runs()
+    test_objective_decreases()
     print("OK")

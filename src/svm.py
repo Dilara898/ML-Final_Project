@@ -32,6 +32,7 @@ import numpy as np
 
 
 class PegasosSVM:
+
     def __init__(
         self,
         lambda_: float = 1e-4,     # regularisation strength (1/(n*C) flavour)
@@ -50,6 +51,10 @@ class PegasosSVM:
         y = np.asarray(y)
         return np.where(y == classes[1], 1.0, -1.0)
 
+    def _objective(self, Xb, y_pm, w):
+        margins = y_pm * (Xb @ w)
+        return 0.5 * self.lambda_ * (w @ w) + np.mean(np.maximum(0.0, 1.0 - margins))
+
     def fit(self, X, y):
         # {-1,1}
         classes = np.unique(y)
@@ -65,7 +70,9 @@ class PegasosSVM:
 
         # random w value
         rng = np.random.default_rng(self.random_state)
-        w = np.zeros(d + 1)          # son element = bias
+        w = np.zeros(d + 1)   
+        self.history_ = []
+        log_every = max(1, self.n_iters // 100)
 
         # w
         for t in range(1, self.n_iters + 1):
@@ -74,7 +81,9 @@ class PegasosSVM:
             margin = y_pm[i] * (Xb[i] @ w)           
             w *= (1 - eta * self.lambda_)           
             if margin < 1:                           
-                w += eta * y_pm[i] * Xb[i]           
+                w += eta * y_pm[i] * Xb[i]   
+            if t % log_every == 0:
+                self.history_.append((t, self._objective(Xb, y_pm, w)))        
 
         
         self.w = w[:-1]

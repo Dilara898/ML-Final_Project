@@ -293,7 +293,69 @@ def plot_geographic_prices(training_df):
 
 
 
+def plot_class_balance(data):
+    """Show class counts and percentages using the training-only threshold."""
+    splits = [
+        ("Training", data["tier_train"]),
+        ("Validation", data["tier_val"]),
+        ("Test", data["tier_test"]),
+    ]
 
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(12, 5),
+        sharey=True,
+    )
+
+    for ax, (name, labels) in zip(axes, splits):
+        counts = np.bincount(
+            np.asarray(labels, dtype=int),
+            minlength=2,
+        )
+        percentages = counts / counts.sum() * 100
+
+        bars = ax.bar(
+            ["Standard", "Premium"],
+            percentages,
+            color=["steelblue", "darkorange"],
+        )
+
+        ax.bar_label(
+            bars,
+            labels=[
+                f"{percentage:.2f}%\n(n={count:,})"
+                for percentage, count in zip(percentages, counts)
+            ],
+            padding=4,
+            fontsize=10,
+        )
+
+        ax.set_title(f"{name} (n={len(labels):,})")
+        ax.set_ylim(0, 65)
+        ax.set_axisbelow(True)
+        ax.grid(axis="y", alpha=0.2)
+
+        print(
+            f"{name}: standard={counts[0]:,}, "
+            f"premium={counts[1]:,}"
+        )
+
+    axes[0].set_ylabel("Percentage of listings")
+
+    threshold = data["tier_threshold"]
+    fig.suptitle(
+        f"Price-tier balance — training median: {threshold:,.0f} AZN\n"
+        "Standard: price ≤ threshold | Premium: price > threshold"
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.88])
+
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = FIGURE_DIR / "eda_class_balance.png"
+
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+
+    print("Saved:", output_path)
 
 
 
@@ -307,3 +369,5 @@ if __name__ == "__main__":
     plot_area_vs_price(training_df)
     plot_rooms(training_df)
     plot_geographic_prices(training_df)
+    plot_class_balance(data)
+    

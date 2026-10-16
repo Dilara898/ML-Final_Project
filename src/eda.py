@@ -107,7 +107,100 @@ def plot_area_vs_price(training_df):
 
     print("Saved:", output_path)
 
+def plot_rooms(training_df):
+    """Show observed residential room counts and median prices."""
+    category_labels = {
+        "Yeni tikili": "New-build apartments",
+        "Köhnə tikili": "Older-build apartments",
+        "Həyət evi/Bağ evi": "Houses / garden houses",
+    }
 
+    residential = training_df.loc[
+        training_df["property_category"].isin(category_labels)
+    ].copy()
+
+    missing_count = residential["rooms"].isna().sum()
+    observed = residential.dropna(subset=["rooms"]).copy()
+
+    # Group rare large room counts for readable plots.
+    observed["room_group"] = (
+        observed["rooms"]
+        .astype(int)
+        .map(lambda value: str(value) if value < 7 else "7+")
+    )
+
+    room_order = ["1", "2", "3", "4", "5", "6", "7+"]
+
+    counts = (
+        observed["room_group"]
+        .value_counts()
+        .reindex(room_order, fill_value=0)
+    )
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+
+    bars = axes[0].bar(
+        room_order,
+        counts.to_numpy(),
+        color="steelblue",
+    )
+    axes[0].bar_label(
+        bars,
+        labels=[f"{value:,}" for value in counts],
+        padding=3,
+        fontsize=9,
+    )
+    axes[0].set_title("Observed residential room counts")
+    axes[0].set_xlabel("Number of rooms")
+    axes[0].set_ylabel("Number of listings")
+    axes[0].set_ylim(0, counts.max() * 1.15)
+
+    for category, label in category_labels.items():
+        subset = observed.loc[
+            observed["property_category"].eq(category)
+        ]
+
+        medians = (
+            subset.groupby("room_group")["price"]
+            .median()
+            .reindex(room_order)
+        )
+
+        axes[1].plot(
+            room_order,
+            medians / 1_000,
+            marker="o",
+            label=label,
+        )
+
+    axes[1].set_title("Median price by rooms and property category")
+    axes[1].set_xlabel("Number of rooms")
+    axes[1].set_ylabel("Median price (thousand AZN)")
+    axes[1].legend(fontsize=8)
+    axes[1].grid(axis="y", alpha=0.2)
+
+    fig.suptitle(
+        f"Training residential listings — "
+        f"{missing_count:,} missing room counts excluded from these plots"
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = FIGURE_DIR / "eda_rooms.png"
+
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+
+    print("Saved:", output_path)
+
+    print("\nObserved room-group counts by property category:")
+    print(
+        observed.groupby(["property_category", "room_group"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=room_order, fill_value=0)
+        .to_string()
+    )
 
 
 
@@ -117,3 +210,4 @@ if __name__ == "__main__":
 
     plot_price_distributions(training_df)
     plot_area_vs_price(training_df)
+    plot_rooms(training_df)

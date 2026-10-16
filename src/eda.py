@@ -183,7 +183,16 @@ def plot_rooms(training_df):
         f"Training residential listings — "
         f"{missing_count:,} missing room counts excluded from these plots"
     )
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.text(
+    0.5,
+    0.01,
+    "Older-build apartments: 6 rooms n=25; 7+ rooms n=9. "
+    "Interpret small-group medians cautiously.",
+    ha="center",
+    fontsize=9,
+)
+
+    fig.tight_layout(rect=[0, 0.06, 1, 0.94])
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     output_path = FIGURE_DIR / "eda_rooms.png"
@@ -202,6 +211,92 @@ def plot_rooms(training_df):
         .to_string()
     )
 
+def plot_geographic_prices(training_df):
+    """Plot observed training coordinates coloured by sale price."""
+    from matplotlib.colors import LogNorm
+
+    observed = training_df.dropna(subset=["lat", "lng"]).copy()
+    missing_count = len(training_df) - len(observed)
+
+    # Shuffle drawing order so expensive listings aren't always on top.
+    observed = observed.sample(frac=1, random_state=42)
+
+    baku = observed.loc[observed["city"].eq("bakı")]
+
+    # Both panels use the same colour scale.
+    colour_scale = LogNorm(
+        vmin=observed["price"].min(),
+        vmax=observed["price"].max(),
+    )
+
+    fig, axes = plt.subplots(
+        1, 2,
+        figsize=(13, 6),
+        constrained_layout=True,
+    )
+
+    panels = [
+        (axes[0], observed, "All training locations"),
+        (axes[1], baku, "Listings labelled Bakı"),
+    ]
+
+    for ax, subset, title in panels:
+        points = ax.scatter(
+            subset["lng"],
+            subset["lat"],
+            c=subset["price"],
+            norm=colour_scale,
+            cmap="viridis",
+            s=12,
+            alpha=0.7,
+            edgecolors="none",
+        )
+
+        ax.set_title(f"{title} (n={len(subset):,})")
+        ax.set_xlabel("Longitude")
+        ax.set_ylabel("Latitude")
+        ax.grid(alpha=0.2)
+        ax.ticklabel_format(
+            axis="both",
+            style="plain",
+            useOffset=False,
+        )
+
+        # Approximate geographic proportions at the panel's latitude.
+        if len(subset) > 0:
+            mean_latitude = subset["lat"].mean()
+            ax.set_aspect(
+                1 / np.cos(np.deg2rad(mean_latitude))
+            )
+
+    colour_bar = fig.colorbar(
+        points,
+        ax=axes,
+        shrink=0.75,
+        pad=0.03,
+    )
+    colour_bar.set_label("Sale price (AZN; logarithmic colour scale)")
+
+    fig.suptitle(
+        "Training property locations and prices\n"
+        f"{missing_count:,} missing coordinate pairs excluded; "
+        "no background map"
+    )
+
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = FIGURE_DIR / "eda_geographic_prices.png"
+
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+
+    print("Saved:", output_path)
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
@@ -211,3 +306,4 @@ if __name__ == "__main__":
     plot_price_distributions(training_df)
     plot_area_vs_price(training_df)
     plot_rooms(training_df)
+    plot_geographic_prices(training_df)

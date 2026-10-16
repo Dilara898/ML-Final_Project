@@ -48,6 +48,36 @@ BILLING_REVIEW_IDS = {
     "189e08a6-095e-49c1-97a6-1d2fd90578d2",
     "92985fed-de67-4547-838e-2b551388a4ed",
 }
+
+NUMERIC_FEATURES = [
+    "area_m2",
+    "land_area_m2",
+    "rooms",
+    "floor_number",
+    "total_floors",
+    "lat",
+    "lng",
+]
+
+CATEGORICAL_FEATURES = [
+    "property_category",
+    "renovation",
+    "ownership_document",
+    "mortgage_available",
+    "city",
+    "location",
+]
+
+MISSING_INDICATORS = [
+    "land_area_m2_missing",
+    "floor_number_missing",
+    "total_floors_missing",
+    "rooms_missing",
+]
+
+
+
+
 def load_raw(path: str = DATA_PATH):
     """Read the raw CSV into a DataFrame (keep UTF-8). Return it unmodified."""
     df = pd.read_csv(path, encoding="utf-8")
@@ -172,6 +202,18 @@ def drop_leakage_columns(df):
     """Remove price-derived columns from the working table."""
     return df.drop(columns=LEAKAGE_COLUMNS)
 
+def select_features(df):
+    """Separate selected input features from the price target."""
+    feature_columns = (
+        NUMERIC_FEATURES
+        + CATEGORICAL_FEATURES
+        + MISSING_INDICATORS
+    )
+
+    X = df[feature_columns].copy()
+    y = df["price"].copy()
+
+    return X, y
 
 
 def clean(df):
@@ -243,9 +285,25 @@ if __name__ == "__main__":
         if column in df.columns
     ]
 
-    print("\nLeakage columns still present:", remaining_leakage)
-    print("Target price retained:", "price" in df.columns)
-    print("Rows after dropping columns:", len(df))
+    X, y = select_features(df)
+
+    print("\nFeature table shape:", X.shape)
+    print("Target shape:", y.shape)
+    print("Selected features:", X.columns.tolist())
+
+    forbidden = ["price", "unit_price", "total_price"]
+    print(
+        "Forbidden price columns in X:",
+        [column for column in forbidden if column in X.columns],
+    )
+
+    print("Feature and target rows aligned:", X.index.equals(y.index))
+
+
+
+    # print("\nLeakage columns still present:", remaining_leakage)
+    # print("Target price retained:", "price" in df.columns)
+    # print("Rows after dropping columns:", len(df))
 
 
 

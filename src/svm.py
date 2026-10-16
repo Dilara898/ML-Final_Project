@@ -45,17 +45,41 @@ class PegasosSVM:
         self.b = 0.0               # bias
 
     @staticmethod
-    def _to_pm1(y):
-        """Map {0,1} (or any 2-class labels) to {-1, +1}. Store the mapping."""
-        raise NotImplementedError("TODO: encode labels to +/-1")
+    
+    def _to_pm1(y, classes):
+        y = np.asarray(y)
+        return np.where(y == classes[1], 1.0, -1.0)
 
     def fit(self, X, y):
-        """
-        Run Pegasos. Sample one (or a mini-batch of) example(s) per step,
-        use eta_t = 1/(lambda*t), and apply the update above.
-        Return self.
-        """
-        raise NotImplementedError("TODO: Pegasos training loop")
+        # {-1,1}
+        classes = np.unique(y)
+        if len(classes) != 2:
+            raise ValueError("Need exactly 2 classes")
+        self.classes_ = classes
+        y_pm = self._to_pm1(y, self.classes_)
+
+        # added 1 to x for bias
+        X = np.asarray(X, dtype=float)
+        n, d = X.shape
+        Xb = np.hstack([X, np.ones((n, 1))])
+
+        # random  value
+        rng = np.random.default_rng(self.random_state)
+        w = np.zeros(d + 1)          # son element = bias
+
+        # 4) Pegasos dövrü
+        for t in range(1, self.n_iters + 1):
+            i = rng.integers(n)                      # təsadüfi bir nümunə
+            eta = 1.0 / (self.lambda_ * t)           # öyrənmə sürəti
+            margin = y_pm[i] * (Xb[i] @ w)           # köhnə w ilə marja
+            w *= (1 - eta * self.lambda_)            # həmişə: w-ni kiçilt
+            if margin < 1:                           # səhvdir və ya sərhədə yaxındır
+                w += eta * y_pm[i] * Xb[i]           # w-ni bu nümunəyə doğru it
+
+        
+        self.w = w[:-1]
+        self.b = w[-1]
+        return self
 
     def decision_function(self, X):
         """Return the signed margin  w . x + b  for each row."""

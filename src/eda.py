@@ -183,14 +183,22 @@ def plot_rooms(training_df):
         f"Training residential listings — "
         f"{missing_count:,} missing room counts excluded from these plots"
     )
+    older_apartments = observed.loc[
+        observed["property_category"].eq("Köhnə tikili")
+    ]
+
+    six_room_count = older_apartments["room_group"].eq("6").sum()
+    seven_plus_count = older_apartments["room_group"].eq("7+").sum()
+
     fig.text(
-    0.5,
-    0.01,
-    "Older-build apartments: 6 rooms n=25; 7+ rooms n=9. "
-    "Interpret small-group medians cautiously.",
-    ha="center",
-    fontsize=9,
-)
+        0.5,
+        0.01,
+        f"Older-build apartments: 6 rooms n={six_room_count}; "
+        f"7+ rooms n={seven_plus_count}. "
+        "Interpret small-group medians cautiously.",
+        ha="center",
+        fontsize=9,
+    )
 
     fig.tight_layout(rect=[0, 0.06, 1, 0.94])
 

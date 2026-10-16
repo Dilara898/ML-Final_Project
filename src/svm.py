@@ -104,3 +104,22 @@ class PegasosSVM:
         y_pm = self._to_pm1(y, self.classes_)
         margins = y_pm * self.decision_function(X)
         return margins <= 1
+
+
+class RandomFourierFeatures:
+    def __init__(self, n_components=200, gamma=0.1, random_state=42):
+        self.n_components = n_components
+        self.gamma = gamma
+        self.random_state = random_state
+
+    def fit(self, X):
+        X = np.asarray(X, dtype=float)
+        d = X.shape[1]
+        rng = np.random.default_rng(self.random_state)
+        self.W = rng.normal(0.0, np.sqrt(2.0 * self.gamma), size=(d, self.n_components))
+        self.b = rng.uniform(0.0, 2 * np.pi, size=self.n_components)
+        return self
+
+    def transform(self, X):
+        X = np.asarray(X, dtype=float)
+        return np.sqrt(2.0 / self.n_components) * np.cos(X @ self.W + self.b)

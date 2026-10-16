@@ -1,5 +1,5 @@
 import numpy as np
-from src.svm import PegasosSVM
+from src.svm import PegasosSVM, RandomFourierFeatures
 
 
 def test_to_pm1():
@@ -50,10 +50,26 @@ def test_vs_sklearn():
     cos = ours.w @ w_ref / (np.linalg.norm(ours.w) * np.linalg.norm(w_ref))
     print(f"agreement={agree:.3f}, cosine(w)={cos:.3f}")
     assert agree > 0.95, agree
+def test_rff_nonlinear():
+    rng = np.random.default_rng(0)
+    X = rng.normal(0, 1.5, size=(400, 2))
+    y = (np.linalg.norm(X, axis=1) < 1.5).astype(int)
+
+    lin = PegasosSVM(lambda_=0.01, n_iters=10000, random_state=42).fit(X, y)
+    acc_lin = (lin.predict(X) == y).mean()
+
+    rff = RandomFourierFeatures(n_components=200, gamma=0.5, random_state=42).fit(X)
+    Z = rff.transform(X)
+    m = PegasosSVM(lambda_=0.001, n_iters=20000, random_state=42).fit(Z, y)
+    acc_rff = (m.predict(Z) == y).mean()
+
+    print(f"linear={acc_lin:.3f}, rff={acc_rff:.3f}")
+    assert acc_rff > 0.9 and acc_rff > acc_lin + 0.1
 if __name__ == "__main__":
     test_to_pm1()
     test_fit_runs()
     test_objective_decreases()
     test_margin_and_support_vectors()
     test_vs_sklearn()
+    test_rff_nonlinear()
     print("OK")

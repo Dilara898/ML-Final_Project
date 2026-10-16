@@ -39,9 +39,9 @@ COLUMN_TRANSLATIONS = {
 
 # Columns that LEAK the target (derived from price). Drop these before training.
 # TODO: list the actual leakage columns you find (e.g. a unit/per-m2 price).
-LEAKAGE_COLUMNS: list[str] = [
-    # "unit_price",
-    # "total_price",
+LEAKAGE_COLUMNS = [
+    "unit_price",
+    "total_price",
 ]
 
 BILLING_REVIEW_IDS = {
@@ -168,6 +168,9 @@ def remove_duplicate_listings(df):
 
     return df.drop(columns="_scrape_time").reset_index(drop=True)
 
+def drop_leakage_columns(df):
+    """Remove price-derived columns from the working table."""
+    return df.drop(columns=LEAKAGE_COLUMNS)
 
 
 
@@ -233,18 +236,34 @@ if __name__ == "__main__":
     rows_before = len(df)
     df = remove_duplicate_listings(df)
 
-    print("\nRows before:", rows_before)
-    print("Rows after:", len(df))
-    print("Rows removed:", rows_before - len(df))
-    print("Repeated URLs remaining:", df["listing_url"].duplicated().sum())
+    df = drop_leakage_columns(df)
 
-    print("\nRetained example listing:")
-    print(
-        df.loc[
-            df["listing_url"].eq("/items/4582627"),
-            ["listing_url", "price", "datetime_scrape_x"],
-        ].to_string(index=False)
-    )
+    remaining_leakage = [
+        column for column in LEAKAGE_COLUMNS
+        if column in df.columns
+    ]
+
+    print("\nLeakage columns still present:", remaining_leakage)
+    print("Target price retained:", "price" in df.columns)
+    print("Rows after dropping columns:", len(df))
+
+
+
+
+
+
+    # print("\nRows before:", rows_before)
+    # print("Rows after:", len(df))
+    # print("Rows removed:", rows_before - len(df))
+    # print("Repeated URLs remaining:", df["listing_url"].duplicated().sum())
+
+    # print("\nRetained example listing:")
+    # print(
+    #     df.loc[
+    #         df["listing_url"].eq("/items/4582627"),
+    #         ["listing_url", "price", "datetime_scrape_x"],
+    #     ].to_string(index=False)
+    # )
 
     # print("\nArea parsing examples:")
     # print(

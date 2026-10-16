@@ -73,3 +73,34 @@ def test_regression_fits_noiseless_data_perfectly():
     y = 3 * X[:, 0] - X[:, 1]
     pred = DecisionTree(task='regression', criterion='mse').fit(X, y).predict(X)
     assert np.allclose(pred, y)
+def leaf_sizes(node):
+    '''Return the n_samples of every leaf under node.'''
+    if node.is_leaf():
+        return [node.n_samples]
+    return leaf_sizes(node.left) + leaf_sizes(node.right)
+
+
+def test_max_depth_is_respected():
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(200, 3))
+    y = rng.integers(0, 2, 200)
+    for depth in (1, 2, 3):
+        assert DecisionTree(max_depth=depth).fit(X, y).get_depth() <= depth
+    assert DecisionTree(max_depth=1).fit(X, y).get_n_leaves() == 2
+
+
+def test_min_samples_leaf_is_respected():
+    rng = np.random.default_rng(4)
+    X = rng.normal(size=(200, 3))
+    y = rng.integers(0, 2, 200)
+    t = DecisionTree(min_samples_leaf=15).fit(X, y)
+    assert min(leaf_sizes(t.root)) >= 15
+
+
+def test_min_samples_split_is_respected():
+    rng = np.random.default_rng(5)
+    X = rng.normal(size=(200, 3))
+    y = rng.integers(0, 2, 200)
+    t = DecisionTree(min_samples_split=50).fit(X, y)
+    big = DecisionTree().fit(X, y)
+    assert t.get_n_leaves() < big.get_n_leaves()

@@ -41,7 +41,7 @@ CONFIG = {
                      min_samples_leaf=5, min_impurity_decrease=0.0),
     "tree_clf": dict(criterion="gini", max_depth=8, min_samples_split=10,
                      min_samples_leaf=5, min_impurity_decrease=0.0),
-    "svm": dict(lambda_=1e-3, n_iters=50_000),
+    "svm": dict(lambda_=3e-3, n_iters=500_000),
 }
 
 
@@ -51,30 +51,29 @@ CONFIG = {
 def stage_data() -> dict:
     """Load, clean, featurize, split, derive tier (TRAIN median), standardize."""
     np.random.seed(SEED)
-    df = data_prep.load_raw()
-    df = data_prep.clean(df)
-    X, y, names = data_prep.make_features(df)         # y = price (raw, AZN)
-    X = np.asarray(X, dtype=float)
-    y = np.asarray(y, dtype=float)
-    X_tr, y_tr, X_val, y_val, X_te, y_te = data_prep.train_val_test_split(X, y)
+    p = data_prep.prepare_data(seed=SEED)   # split first, preprocessing fitted on TRAIN only
 
-    tier_tr, thr = data_prep.make_tier_label(y_tr)                 # threshold: TRAIN only
-    tier_val, _ = data_prep.make_tier_label(y_val, thr)
-    tier_te, _ = data_prep.make_tier_label(y_te, thr)
-
-    Xs_tr, Xs_val, Xs_te = data_prep.standardize(X_tr, X_val, X_te)  # TRAIN stats only
+    X_tr = np.asarray(p["X_train"], dtype=float)
+    X_val = np.asarray(p["X_val"], dtype=float)
+    X_te = np.asarray(p["X_test"], dtype=float)
+    Xs_tr = np.asarray(p["X_train_scaled"], dtype=float)
+    Xs_val = np.asarray(p["X_val_scaled"], dtype=float)
+    Xs_te = np.asarray(p["X_test_scaled"], dtype=float)
+    thr = p["tier_threshold"]
 
     d = dict(
-        names=list(names), threshold=float(thr),
+        names=list(p["feature_names"]), threshold=float(thr),
         X_tr=X_tr, X_val=X_val, X_te=X_te,
         Xs_tr=Xs_tr, Xs_val=Xs_val, Xs_te=Xs_te,
-        price_tr=y_tr, price_val=y_val, price_te=y_te,
-        tier_tr=np.asarray(tier_tr).astype(int),
-        tier_val=np.asarray(tier_val).astype(int),
-        tier_te=np.asarray(tier_te).astype(int),
+        price_tr=np.asarray(p["y_train"], dtype=float),
+        price_val=np.asarray(p["y_val"], dtype=float),
+        price_te=np.asarray(p["y_test"], dtype=float),
+        tier_tr=np.asarray(p["tier_train"]).astype(int),
+        tier_val=np.asarray(p["tier_val"]).astype(int),
+        tier_te=np.asarray(p["tier_test"]).astype(int),
     )
     d["info"] = dict(
-        rows=int(len(X)), n_features=int(X.shape[1]),
+        rows=int(len(X_tr) + len(X_val) + len(X_te)), n_features=int(X_tr.shape[1]),
         n_train=int(len(X_tr)), n_val=int(len(X_val)), n_test=int(len(X_te)),
         tier_threshold=float(thr),
         premium_share_train=float(d["tier_tr"].mean()),

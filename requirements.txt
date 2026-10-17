@@ -1,6 +1,8 @@
-# Pin your exact versions (run `pip freeze` once your env works).
-# These are sensible starting points — adjust as needed, then PIN them.
+# Python 3.10-3.12 (numpy 1.26.4 has no wheels for 3.13).
+# Run `pip freeze | grep -iE "^(numpy|pandas|matplotlib|scikit-learn|pytest)=="`
+# once the env works and make sure these pins match what you actually ran.
 numpy==1.26.4
 pandas==2.2.2
 matplotlib==3.8.4
-scikit-learn==1.4.2   # baselines / optional bonuses ONLY — not for your models
+scikit-learn==1.4.2   # baselines / optional bonuses ONLY — not for our models
+pytest==8.2.0         # tests/ only

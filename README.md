@@ -1,63 +1,58 @@
-# MLE-AI-201 Machine Learning — Final Project (Starter Pack)
+# MLE-AI-201 Machine Learning — Final Project
 
-Build **two models from scratch** (a decision tree and an SVM) on the
-**bina.az** real-estate dataset, then benchmark honestly against
-scikit-learn. Read the full brief in the project statement PDF handed out
-with this pack.
+Two models written **from scratch in NumPy** — a decision tree and a Pegasos
+SVM — benchmarked honestly against scikit-learn on the **bina.az** sale
+listings.
 
-- **Released:** Sun 04 Oct 2026
-- **Due:** **Sun 18 Oct 2026, 23:59 (Baku)** — two weeks, no late submissions.
-- **Demo:** defended in the session after the deadline.
+- **Task A — regression:** predict `price` (modelled as `log(price)`).
+- **Task B — classification:** premium vs standard price tier; the threshold
+  is the **training-set median** (never val/test).
 
-## What you submit (on Moodle)
-Exactly **three** things; **one member submits** for the whole team:
-1. **GitHub link** to your repo (tagged `v1.0-final`).
-2. **Report PDF** (IEEE two-column — use `report/report.tex`).
-3. **Slides PDF**.
+scikit-learn is used only for the baselines and in `tests/` as a reference.
 
-Keep `contribution_report.md` in the repo root (checked at the demo).
-
-## The two tasks
-- **Task A — Regression:** predict `price` (consider `log(price)`).
-- **Task B — Classification:** predict a derived **price tier**
-  (premium vs standard, median split on the training set).
-
-## Golden rule
-Your **decision tree** and your **SVM** must be **your own NumPy code**.
-scikit-learn is for the comparison baselines (and the optional bonuses)
-only. For the SVM you do **not** need a QP/SMO solver — use the
-**Pegasos** sub-gradient method (see the statement and `src/svm.py`).
-
-## Repo layout
-```
-.
-├── README.md               # this file
-├── requirements.txt        # pin your versions
-├── .gitignore
-├── contribution_report.md  # who did what (keep in repo root)
-├── data/                   # dataset lives here (not committed — see data/README.md)
-├── src/                    # YOUR from-scratch code
-│   ├── data_prep.py        #   loading, cleaning, split, tier label
-│   ├── decision_tree.py    #   DecisionTree (Gini/entropy/MSE)
-│   ├── svm.py              #   PegasosSVM (hinge-loss sub-gradient)
-│   ├── evaluate.py         #   metrics + comparison helpers
-│   └── run_all.py          #   ONE command reproduces every number/figure
-├── report/                 # IEEE report (self-contained, no IEEEtran.cls)
-│   ├── report.tex
-│   └── figures/
-└── presentation/           # your slides PDF
-```
-
-## Reproducibility (graded)
-- Pin dependencies in `requirements.txt`; fix all random seeds.
-- `python -m src.run_all` must reproduce **every** headline number and
-  figure from a clean checkout.
-- Do **not** commit the raw data archive (see `.gitignore`).
-
-## Quick start
+## Reproduce everything (one command)
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate     # Python 3.10-3.12
 pip install -r requirements.txt
-# put the dataset in data/ (see data/README.md), then:
+
+# 1) put the dataset in data/ (see data/README.md), e.g. data/bina_az_sale.csv
+# 2) run:
 python -m src.run_all
+```
+This prints every headline table (test metrics, 5-fold CV mean ± std, timing,
+SVM margin report) and writes all figures to `report/figures/` and the raw
+numbers to `results/results.json`.
+
+| Command | What it does |
+|---|---|
+| `python -m src.run_all` | full run: tables + figures + cross-validation |
+| `python -m src.run_all --no-cv` | same without CV (fast check) |
+| `python -m src.run_all --check-seeds` | runs the pipeline twice, fails if any test metric differs |
+| `python -m pytest -q` | unit tests (metrics vs sklearn, tree, SVM) |
+
+Dataset: Kaggle `sehriyarmemmedli/binaaz-sale-project` — downloaded on
+`<DATE>`, version `<VERSION/hash>` *(fill in; the raw archive is not committed)*.
+
+## Reproducibility
+- All randomness is seeded from `data_prep.SEED = 42` (split, folds, SGD,
+  Pegasos sampling, sklearn `random_state`).
+- Dependencies are pinned in `requirements.txt`.
+- The test set is used **only** for final numbers. Tier threshold,
+  standardization statistics and hyperparameters come from training /
+  validation data only. In cross-validation they are recomputed per fold.
+- Fair comparison: identical split and identical CV folds for our models and
+  the sklearn baselines; sklearn scaling lives inside a `Pipeline`.
+
+## Layout
+```
+src/data_prep.py      loading, cleaning, split, tier label, standardize
+src/decision_tree.py  DecisionTree (Gini / entropy / MSE)
+src/svm.py            PegasosSVM
+src/evaluate.py       metrics, ROC, k-fold, compare table (NumPy only)
+src/plots.py          confusion / ROC / error analysis / importance figures
+src/run_all.py        one-command pipeline
+tests/                unit tests
+report/               IEEE report + figures/
+presentation/         slides PDF
+contribution_report.md
 ```

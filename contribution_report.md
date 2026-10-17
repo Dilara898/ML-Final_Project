@@ -7,10 +7,10 @@ plus a short per-member paragraph.
 ## Team
 | Member (Surname, Name) | GitHub handle | Main responsibilities |
 |------------------------|---------------|-----------------------|
-| Askerov, Agil                   | ---           | Data loading, cleaning, feature engineering, and EDA pipeline                   |
-| Rzazada, Dilara                   | ---           | From-scratch Decision Tree, depth tuning, and Random Forest (Bonus 9)                   |
-|Aliyeva, Leyla                  | ---           |From-scratch Pegasos SVM solver, RFF mapping, and hyperparameter sweeps                |
-| Gurbanzade, Mahammad                    | ---           |Evaluation metrics, run_all.py pipeline integration, and report coordination                  |
+| Askerov, Agil                   | @agilasgarli-sys           | Data loading, cleaning, feature engineering, and EDA pipeline                   |
+| Rzazada, Dilara                   | @Dilara898          | From-scratch Decision Tree, depth tuning, and Random Forest (Bonus 9)                   |
+|Aliyeva, Leyla                  | @LeylAIeva        |From-scratch Pegasos SVM solver, RFF mapping, and hyperparameter sweeps                |
+| Gurbanzade, Mahammad                    | @MahammadGurbanzade          |Evaluation metrics, run_all.py pipeline integration, and report coordination                  |
 
 ## Per-member summary
 **Askerov, Agil** — Designed and implemented the complete data preprocessing pipeline in `src/data_prep.py`. Handled column translations, numerical parsing of floor/area features, target leakage removal, and missing value imputations. Created the main EDA figures in `src/eda.py` and built the stratified train/validation/test split logic.

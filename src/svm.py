@@ -35,15 +35,21 @@ class PegasosSVM:
 
     def __init__(
         self,
-        lambda_: float = 1e-4,     # regularisation strength (1/(n*C) flavour)
-        n_iters: int = 20_000,     # number of sub-gradient steps
+        lambda_: float = 1e-4,
+        n_iters: int = 20_000,
         random_state: int = 42,
+        lr_schedule: str = "pegasos",
+        eta0: float = 0.1,
     ):
+        if lr_schedule not in ("pegasos", "constant"):
+            raise ValueError("lr_schedule must be 'pegasos' or 'constant'")
         self.lambda_ = lambda_
         self.n_iters = n_iters
         self.random_state = random_state
-        self.w = None              # weight vector
-        self.b = 0.0               # bias
+        self.lr_schedule = lr_schedule
+        self.eta0 = eta0
+        self.w = None
+        self.b = 0.0
 
     @staticmethod
     
@@ -77,7 +83,10 @@ class PegasosSVM:
         # w
         for t in range(1, self.n_iters + 1):
             i = rng.integers(n)                      
-            eta = 1.0 / (self.lambda_ * t)           
+            if self.lr_schedule == "pegasos":
+                eta = 1.0 / (self.lambda_ * t)
+            else:
+                eta = self.eta0          
             margin = y_pm[i] * (Xb[i] @ w)           
             w *= (1 - eta * self.lambda_)           
             if margin < 1:                           

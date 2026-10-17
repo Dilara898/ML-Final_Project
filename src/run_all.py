@@ -26,7 +26,7 @@ import sys
 
 import numpy as np
 
-from . import data_prep, evaluate, plots
+from . import data_prep, evaluate, plot as plots
 from .decision_tree import DecisionTree
 from .svm import PegasosSVM
 

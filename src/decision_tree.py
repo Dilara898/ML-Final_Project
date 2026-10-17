@@ -1,19 +1,12 @@
-"""
-decision_tree.py — a decision tree built FROM SCRATCH (NumPy only).
+'''
+decision_tree.py - a decision tree built FROM SCRATCH (NumPy only).
 
-Must support BOTH tasks:
-  - classification (criterion = "gini" or "entropy")  -> price tier
-  - regression     (criterion = "mse")                -> price
+Supports BOTH tasks:
+  - classification (criterion = 'gini' or 'entropy')  -> price tier
+  - regression     (criterion = 'mse')                -> log(price)
 
-scikit-learn is NOT allowed here. This is your own code.
-
-Suggested design:
-  - a small Node (feature index, threshold, left, right, value/leaf_value),
-  - recursive _grow with a best-split search over features & thresholds,
-  - impurity functions (gini / entropy / mse) and the impurity-decrease
-    objective used to pick splits,
-  - hyperparameters that control overfitting (below).
-"""
+scikit-learn is NOT used here. This is our own code.
+'''
 
 from __future__ import annotations
 
@@ -21,13 +14,14 @@ import numpy as np
 
 
 class Node:
-    """One node of the tree. Fill in the fields you need."""
+    '''One node of the tree.'''
+
     def __init__(self):
-        self.feature = None      # int: feature index to split on (internal)
-        self.threshold = None    # float: split threshold (internal)
+        self.feature = None      # int: feature index to split on (internal node)
+        self.threshold = None    # float: go LEFT if x[feature] <= threshold
         self.left = None         # Node
         self.right = None        # Node
-        self.value = None        # leaf prediction (class label/proba or mean)
+        self.value = None        # leaf prediction: class-probability vector or mean
         self.n_samples = 0       # how many training rows reached this node
         self.impurity = 0.0      # impurity of the rows at this node
 
@@ -38,13 +32,14 @@ class Node:
 class DecisionTree:
     def __init__(
         self,
-        task: str = "classification",   # "classification" | "regression"
-        criterion: str = "gini",        # "gini" | "entropy" | "mse"
+        task: str = 'classification',   # 'classification' | 'regression'
+        criterion: str = 'gini',        # 'gini' | 'entropy' | 'mse'
         max_depth: int | None = None,
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         min_impurity_decrease: float = 0.0,
         random_state: int = 42,
+        max_features=None,             # None = all | 'sqrt' | int  (used by the forest)
     ):
         self.task = task
         self.criterion = criterion
@@ -53,10 +48,11 @@ class DecisionTree:
         self.min_samples_leaf = min_samples_leaf
         self.min_impurity_decrease = min_impurity_decrease
         self.random_state = random_state
+        self.max_features = max_features
+        self._rng = np.random.default_rng(random_state)
         self.root: Node | None = None
 
     # --- impurity -----------------------------------------------------------
-    
     def _crit(self) -> str:
         '''Regression always uses MSE; classification uses gini or entropy.'''
         return 'mse' if self.task == 'regression' else self.criterion
@@ -75,7 +71,19 @@ class DecisionTree:
         p = p[p > 0]                                      # entropy: skip log(0)
         return float(-np.sum(p * np.log2(p)))
 
-        
+    # --- split search -------------------------------------------------------
+    def _candidate_features(self, d: int):
+        '''Which feature columns may be tried at this split (all, unless max_features is set).'''
+        if self.max_features is None:
+            return range(d)
+        if self.max_features == 'sqrt':
+            m = max(1, int(np.sqrt(d)))
+        else:
+            m = min(int(self.max_features), d)
+        if m >= d:
+            return range(d)
+        return self._rng.choice(d, size=m, replace=False)
+
     def _best_split(self, X, y):
         '''
         Return (feature, threshold, decrease) for the split with the largest
@@ -99,7 +107,7 @@ class DecisionTree:
         best = None
         best_dec = -np.inf
 
-        for j in range(d):
+        for j in self._candidate_features(d):
             order = np.argsort(X[:, j], kind='mergesort')
             xs = X[order, j]
 
@@ -146,7 +154,6 @@ class DecisionTree:
         return best
 
     # --- grow / predict -----------------------------------------------------
-
     def _leaf_value(self, y):
         if self._crit() == 'mse':
             return float(np.mean(y))
@@ -171,6 +178,7 @@ class DecisionTree:
         if split is None:
             return node
         feature, threshold, decrease = split
+
         # weighted decrease must be big enough (same definition as sklearn)
         if len(y) / self._n_total * decrease < self.min_impurity_decrease:
             return node
@@ -183,7 +191,6 @@ class DecisionTree:
         node.right = self._grow(X[~mask], y[~mask], depth + 1)
         return node
 
- 
     def fit(self, X, y):
         if self.task not in ('classification', 'regression'):
             raise ValueError('task must be classification or regression')
@@ -198,6 +205,7 @@ class DecisionTree:
         else:
             y = y.astype(float)
 
+        self._rng = np.random.default_rng(self.random_state)
         self._n_total = len(y)
         self._importances = np.zeros(X.shape[1])
         self.root = self._grow(X, y, depth=0)
@@ -206,7 +214,6 @@ class DecisionTree:
         self.feature_importances_ = self._importances / total if total > 0 else self._importances
         return self
 
- 
     def _predict_one(self, x, node: Node):
         '''Walk from the root to a leaf and return the leaf's value.'''
         while not node.is_leaf():
@@ -220,7 +227,6 @@ class DecisionTree:
             return np.array(values, dtype=float)
         return self.classes_[np.argmax(np.vstack(values), axis=1)]
 
-    
     def predict_proba(self, X):
         '''Classification only: return class probabilities from leaf counts.'''
         if self.task != 'classification':
@@ -228,6 +234,7 @@ class DecisionTree:
         X = np.asarray(X, dtype=float)
         return np.vstack([self._predict_one(x, self.root) for x in X])
 
+    # --- small helpers for the report --------------------------------------
     def get_depth(self) -> int:
         def depth(node):
             return 0 if node.is_leaf() else 1 + max(depth(node.left), depth(node.right))

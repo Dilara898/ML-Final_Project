@@ -73,3 +73,85 @@ def test_regression_fits_noiseless_data_perfectly():
     y = 3 * X[:, 0] - X[:, 1]
     pred = DecisionTree(task='regression', criterion='mse').fit(X, y).predict(X)
     assert np.allclose(pred, y)
+def leaf_sizes(node):
+    '''Return the n_samples of every leaf under node.'''
+    if node.is_leaf():
+        return [node.n_samples]
+    return leaf_sizes(node.left) + leaf_sizes(node.right)
+
+
+def test_max_depth_is_respected():
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(200, 3))
+    y = rng.integers(0, 2, 200)
+    for depth in (1, 2, 3):
+        assert DecisionTree(max_depth=depth).fit(X, y).get_depth() <= depth
+    assert DecisionTree(max_depth=1).fit(X, y).get_n_leaves() == 2
+
+
+def test_min_samples_leaf_is_respected():
+    rng = np.random.default_rng(4)
+    X = rng.normal(size=(200, 3))
+    y = rng.integers(0, 2, 200)
+    t = DecisionTree(min_samples_leaf=15).fit(X, y)
+    assert min(leaf_sizes(t.root)) >= 15
+
+
+def test_min_samples_split_is_respected():
+    rng = np.random.default_rng(5)
+    X = rng.normal(size=(200, 3))
+    y = rng.integers(0, 2, 200)
+    t = DecisionTree(min_samples_split=50).fit(X, y)
+    big = DecisionTree().fit(X, y)
+    assert t.get_n_leaves() < big.get_n_leaves()
+def test_min_impurity_decrease_can_stop_all_splits():
+    rng = np.random.default_rng(6)
+    X = rng.normal(size=(100, 3))
+    y = rng.integers(0, 2, 100)
+    t = DecisionTree(min_impurity_decrease=0.9).fit(X, y)
+    assert t.root.is_leaf()
+def test_predict_proba_rows_sum_to_one():
+    rng = np.random.default_rng(1)
+    X = rng.normal(size=(100, 3))
+    y = (X[:, 0] + rng.normal(scale=0.5, size=100) > 0).astype(int)
+    p = DecisionTree(max_depth=3).fit(X, y).predict_proba(X)
+    assert p.shape == (100, 2)
+    assert np.allclose(p.sum(axis=1), 1.0)
+
+
+def test_importance_finds_the_useful_feature():
+    rng = np.random.default_rng(7)
+    X = rng.normal(size=(300, 4))
+    y = (X[:, 2] > 0).astype(int)                 # only feature 2 matters
+    t = DecisionTree(max_depth=3).fit(X, y)
+    assert t.feature_importances_.argmax() == 2
+    assert t.feature_importances_.sum() == pytest.approx(1.0)
+@pytest.mark.parametrize('crit', ['gini', 'entropy'])
+def test_matches_sklearn_classification(crit):
+    sk = pytest.importorskip('sklearn.tree')
+    rng = np.random.default_rng(10)
+    X = rng.normal(size=(400, 5))
+    y = ((X[:, 0] + 0.5 * X[:, 1] + rng.normal(scale=0.7, size=400)) > 0).astype(int)
+    Xte = rng.normal(size=(200, 5))
+
+    # depth 3 on purpose: deeper nodes can hold a few rows where two splits tie exactly,
+    # and then sklearn and we may legitimately pick different (equally good) splits.
+    ours = DecisionTree(criterion=crit, max_depth=3).fit(X, y)
+    ref = sk.DecisionTreeClassifier(criterion=crit, max_depth=3, random_state=0).fit(X, y)
+
+    assert np.array_equal(ours.predict(Xte), ref.predict(Xte))
+    assert np.allclose(ours.feature_importances_, ref.feature_importances_, atol=1e-6)
+
+
+def test_matches_sklearn_regression():
+    sk = pytest.importorskip('sklearn.tree')
+    rng = np.random.default_rng(11)
+    X = rng.normal(size=(400, 5))
+    y = 2 * X[:, 0] - X[:, 1] ** 2 + rng.normal(scale=0.3, size=400)
+    Xte = rng.normal(size=(200, 5))
+
+    ours = DecisionTree(task='regression', criterion='mse', max_depth=3).fit(X, y)
+    ref = sk.DecisionTreeRegressor(max_depth=3, random_state=0).fit(X, y)
+
+    assert np.allclose(ours.predict(Xte), ref.predict(Xte), atol=1e-6)
+    assert np.allclose(ours.feature_importances_, ref.feature_importances_, atol=1e-6)

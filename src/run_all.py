@@ -41,7 +41,7 @@ CONFIG = {
                      min_samples_leaf=5, min_impurity_decrease=0.0),
     "tree_clf": dict(criterion="gini", max_depth=8, min_samples_split=10,
                      min_samples_leaf=5, min_impurity_decrease=0.0),
-    "svm": dict(lambda_=1e-3, n_iters=50_000),
+    "svm": dict(lambda_=3e-3, n_iters=500_000),
 }
 
 

@@ -1,0 +1,93 @@
+% ===== Goes into: Method -> Support-vector machine (from scratch) =====
+We implement a linear soft-margin SVM in NumPy and train it with Pegasos,
+a stochastic sub-gradient method on the regularised hinge-loss primal
+(no quadratic-programming solver). Labels are mapped to $\{-1,+1\}$
+(premium $=+1$). At step $t$ we draw one example $i$, set
+$\eta_t = 1/(\lambda t)$, and update
+\begin{equation}
+  \mathbf{w} \leftarrow (1-\eta_t\lambda)\,\mathbf{w}
+  + \eta_t\, y_i \mathbf{x}_i \,\mathbb{1}\!\left[y_i\,\mathbf{w}^{\top}\mathbf{x}_i < 1\right].
+\end{equation}
+The bias is folded into $\mathbf{w}$ by appending a constant 1 to every
+feature vector, so the bias is also regularised (a difference from the
+standard formulation and from scikit-learn). Features are standardised
+with training-set statistics only. The margin width is $2/\lVert\mathbf{w}\rVert$
+(computed on the weights without the bias), and support vectors are the
+training points with $y_i(\mathbf{w}^{\top}\mathbf{x}_i+b)\le 1$. The
+objective $J$ is logged during training. A constant learning-rate option
+is also implemented; all reported results use the Pegasos schedule.
+
+For non-linear boundaries we use random Fourier features (RFF) rather than
+kernelised Pegasos: $z(\mathbf{x})=\sqrt{2/D}\cos(W^{\top}\mathbf{x}+\mathbf{b})$
+with $W_{jk}\sim\mathcal{N}(0,2\gamma)$ and $b_k\sim U[0,2\pi]$, fitted on
+the training split only. This approximates an RBF kernel, reuses the linear
+solver unchanged, and avoids an $n\times n$ kernel matrix.
+
+% ===== Goes into: Experimental Setup =====
+SVM hyperparameters were chosen on the validation split only; the test set
+was evaluated once, after the final configuration was fixed. We swept
+$\lambda\in\{10^{-5},\dots,1\}$ (50{,}000 iterations), then, for RFF,
+$\gamma\in\{0.0005,\dots,0.03\}$ with $\lambda\in\{10^{-5},10^{-4},10^{-3}\}$
+and $D=300$. A follow-up checked longer training (50k, 200k, 500k iterations)
+and $D\in\{300,1000\}$. All runs use seed 42. Baselines are scikit-learn's
+SGD classifier (hinge loss) and LinearSVC on standardised features.
+
+% ===== Goes into: Results =====
+Table~\ref{tab:svm_lambda} shows the effect of $\lambda$: as $\lambda$ grows,
+$\lVert\mathbf{w}\rVert$ shrinks and the margin widens, while validation
+accuracy peaks at $\lambda=10^{-2}$ (with 50k iterations).
+
+\begin{table}[t]
+  \centering
+  \caption{Linear Pegasos, $\lambda$ sweep (50k iterations $\approx$ 1.1 epochs).}
+  \label{tab:svm_lambda}
+  \begin{tabular}{@{}rrrrrr@{}}
+    \toprule
+    $\lambda$ & $\lVert w\rVert$ & margin & SV share & train & val \\
+    \midrule
+    $10^{-5}$ & 788.8 & 0.003 & 0.208 & 0.794 & 0.795 \\
+    $10^{-4}$ & 79.9  & 0.025 & 0.222 & 0.801 & 0.801 \\
+    $10^{-3}$ & 9.83  & 0.203 & 0.291 & 0.813 & 0.818 \\
+    $10^{-2}$ & 2.37  & 0.845 & 0.408 & 0.838 & 0.844 \\
+    $10^{-1}$ & 1.12  & 1.781 & 0.542 & 0.826 & 0.827 \\
+    $1$       & 0.54  & 3.713 & 0.855 & 0.792 & 0.790 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/svm_lambda_convergence.png}
+  \caption{Pegasos objective $J$ versus iteration for each $\lambda$ (log scale).}
+  \label{fig:svm_conv}
+\end{figure}
+
+With longer training (500k iterations, about 11 epochs), $\lambda=3\times10^{-3}$
+gave the best validation accuracy (0.846) and was fixed as the final
+configuration. On the test set the SVM reaches accuracy 0.849, F1 0.850 and
+AUC 0.923; in 5-fold CV its F1 is $0.843\pm0.002$, versus $0.845\pm0.006$ for
+SGD-hinge and $0.839\pm0.003$ for LinearSVC, i.e.\ within one standard
+deviation of both baselines. The final model has $\lVert w\rVert=2.52$, margin
+width 0.79, and 17{,}288 support vectors (38.3\% of training data). Fitting
+takes 5.5\,s (SGD-hinge 1.1\,s, LinearSVC 3.5\,s); prediction takes 1\,ms.
+
+% ===== Goes into: Discussion and Limitations =====
+RFF did not improve on the linear SVM: the best validation accuracy was 0.830
+with $D=300$ and 0.843 with $D=1000$, versus 0.846 for the linear model.
+Increasing the number of iterations did not help at $D=300$, whereas more
+components did, which suggests the feature budget, not training length, was
+limiting; we did not test this further. The decision tree outperforms the
+SVM by about five accuracy points; a plausible reason (not verified) is that
+a linear model cannot capture interactions between, for example, location
+and area. Differences of about 0.004 in validation accuracy are within
+sampling noise for 9{,}667 validation examples, so close configurations
+cannot be ranked reliably. Remaining differences to scikit-learn come from
+the stochastic solver, the regularised bias, and the $C=1/(n\lambda)$
+correspondence being exact only at the optimum. Sweeps used a single seed.
+
+% ===== Goes into: Tools and Acknowledgements =====
+% Adjust to what is actually true and to the course's disclosure rules:
+An AI assistant (Claude, Anthropic) was used to explain Pegasos and random
+Fourier features and to draft parts of \texttt{src/svm.py}, the sweep scripts
+and the SVM tests; the author ran, checked (including against scikit-learn),
+and tuned them.
